@@ -1,0 +1,1950 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLOv26 实时检测系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Grotesk:wght@300;400;500;700&display=swap');
+        
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-tertiary: #1a1a2e;
+            --accent-cyan: #00f5ff;
+            --accent-lime: #bfff00;
+            --accent-red: #ff0055;
+            --text-primary: #e0e0e0;
+            --text-secondary: #888899;
+            --border-subtle: rgba(0, 245, 255, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        /* 网格背景 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 245, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 245, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        /* 扫描线效果 */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15) 0px,
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 1;
+            animation: scanlines 8s linear infinite;
+        }
+        
+        @keyframes scanlines {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(4px); }
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+            z-index: 2;
+        }
+        
+        /* 标题区域 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        
+        .title-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-lime));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+        }
+        
+        .status-group {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .status-dot.active {
+            background: var(--accent-lime);
+            box-shadow: 0 0 10px var(--accent-lime);
+        }
+        
+        .status-dot.inactive {
+            background: var(--accent-red);
+            box-shadow: 0 0 10px var(--accent-red);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* 主内容区域 */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        /* Tab 导航 */
+        .tab-bar {
+            display: flex;
+            gap: 0;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid var(--border-subtle);
+        }
+        .tab-btn {
+            padding: 0.75rem 2rem;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover {
+            color: var(--text-primary);
+            border-bottom-color: rgba(0, 245, 255, 0.3);
+        }
+        .tab-btn.active {
+            color: var(--accent-cyan);
+            border-bottom-color: var(--accent-cyan);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* 配置页网格 */
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        @media (max-width: 1200px) {
+            .config-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 768px) {
+            .config-grid { grid-template-columns: 1fr; }
+        }
+        
+        /* 检测日志侧边栏 */
+        .detect-log-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            min-height: 0;
+        }
+        
+        /* 紧凑统计行 */
+        .compact-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+        }
+        .cstat {
+            text-align: center;
+            padding: 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 0.375rem;
+        }
+        .cstat-val {
+            display: block;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+        }
+        .cstat-label {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        
+        /* 过滤徽章条 */
+        .filter-badge-bar {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .f-badge {
+            padding: 0.2rem 0.6rem;
+            background: rgba(0, 245, 255, 0.08);
+            border: 1px solid rgba(0, 245, 255, 0.15);
+            border-radius: 0.25rem;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+        
+        /* 视频区域 */
+        .video-section {
+            position: relative;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .video-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            background: rgba(18, 18, 26, 0.95);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        
+        .video-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.125rem;
+            font-weight: 500;
+            color: var(--accent-cyan);
+        }
+        
+        .video-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .btn-icon {
+            padding: 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 0.375rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-icon:hover {
+            color: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+        }
+        
+        .video-container {
+            position: relative;
+            aspect-ratio: 16/9;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .stream-recovery-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 0, 85, 0.08);
+            border: 1px solid rgba(255, 0, 85, 0.2);
+            border-radius: 0.375rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.8rem;
+        }
+        
+        #videoElement {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .video-overlay.roi-active {
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+        
+        .roi-mask {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+        }
+        
+        .roi-indicator {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 245, 255, 0.9);
+            color: #0a0a0f;
+            padding: 4px 16px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            z-index: 10;
+            pointer-events: none;
+            display: none;
+        }
+        
+        .roi-indicator.active {
+            display: block;
+        }
+        
+        .btn-sm {
+            padding: 0.35rem 0.75rem !important;
+            font-size: 0.8rem !important;
+        }
+        
+        .control-hint {
+            display: block;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            font-style: italic;
+        }
+        
+        .detection-box {
+            position: absolute;
+            border: 2px solid var(--accent-lime);
+            background: rgba(191, 255, 0, 0.1);
+        }
+        
+        .detection-label {
+            position: absolute;
+            top: -24px;
+            left: 0;
+            padding: 2px 8px;
+            background: var(--accent-lime);
+            color: var(--bg-primary);
+            font-size: 0.75rem;
+            font-weight: 700;
+            border-radius: 2px;
+        }
+        
+        /* 侧边栏 */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            overflow-y: auto;
+            max-height: calc(100vh - 200px);
+        }
+        
+        .panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .panel-header {
+            padding: 1rem 1.5rem;
+            background: rgba(18, 18, 26, 0.95);
+            border-bottom: 1px solid var(--border-subtle);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--accent-cyan);
+        }
+        
+        .panel-body {
+            padding: 1.5rem;
+        }
+        
+        /* 检测列表 */
+        .detection-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .detection-item {
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border-left: 3px solid var(--accent-lime);
+            border-radius: 0.25rem;
+            transition: all 0.2s;
+        }
+        
+        .detection-item:hover {
+            background: rgba(191, 255, 0, 0.05);
+        }
+        
+        .detection-class {
+            font-weight: 600;
+            color: var(--accent-lime);
+            margin-bottom: 0.25rem;
+        }
+        
+        .detection-info {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        /* 统计卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        .stat-card {
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 0.375rem;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            margin-bottom: 0.25rem;
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        /* 控制面板 */
+        .control-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        .control-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .control-select {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 0.375rem;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+        }
+        
+        .control-slider {
+            width: 100%;
+            -webkit-appearance: none;
+            height: 4px;
+            background: var(--bg-tertiary);
+            border-radius: 2px;
+            outline: none;
+        }
+        
+        .control-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .slider-value {
+            display: inline-block;
+            margin-left: 0.5rem;
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+        
+        /* 按钮 */
+        .btn-primary {
+            width: 100%;
+            padding: 0.875rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-lime));
+            border: none;
+            border-radius: 0.375rem;
+            color: var(--bg-primary);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 245, 255, 0.3);
+        }
+        
+        .btn-secondary {
+            width: 100%;
+            padding: 0.875rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 0.375rem;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-secondary:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+        
+        /* 日志区域 */
+        .log-container {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 0.375rem;
+            padding: 1rem;
+            font-size: 0.75rem;
+            line-height: 1.5;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .log-line {
+            margin-bottom: 0.25rem;
+        }
+        
+        .log-time {
+            color: var(--text-secondary);
+        }
+        
+        .log-message {
+            color: var(--accent-cyan);
+        }
+        
+        .log-message.success {
+            color: var(--accent-lime);
+        }
+        
+        .log-message.error {
+            color: var(--accent-red);
+        }
+        
+        /* 底部信息栏 */
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-subtle);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        .footer-links {
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .footer-link {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        
+        .footer-link:hover {
+            color: var(--accent-lime);
+        }
+        
+        /* 加载动画 */
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid var(--bg-tertiary);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* 响应式 */
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 标题栏 -->
+        <header class="header">
+            <div class="title-group">
+                <h1 class="title">YOLOv26 实时检测系统</h1>
+                <p class="subtitle">Real-time Object Detection with RTSP Streaming</p>
+            </div>
+            <div class="status-group">
+                <div class="status-badge">
+                    <span class="status-dot active" id="streamStatus"></span>
+                    <span id="streamStatusText">流已连接</span>
+                </div>
+                <div class="status-badge">
+                    <span class="status-dot active" id="detectStatus"></span>
+                    <span id="detectStatusText">检测中</span>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Tab 导航 -->
+        <div class="tab-bar">
+            <button class="tab-btn active" data-tab="detect">📹 实时检测</button>
+            <button class="tab-btn" data-tab="config">⚙️ YOLO配置</button>
+        </div>
+        
+        <!-- Tab 1: 实时检测 -->
+        <div class="tab-content active" id="tab-detect">
+            <div class="main-grid">
+                <!-- 视频区域 -->
+                <section class="video-section">
+                    <div class="stream-recovery-bar" id="recoveryBar" style="display:none;">
+                        <span style="color:var(--accent-red);">⚠️ 视频流已断开</span>
+                        <span class="control-hint" id="recoveryStatus" style="margin:0;">尝试自动重连中...</span>
+                        <div style="display:flex;gap:8px;margin-left:auto;">
+                            <label style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--text-secondary);">
+                                <input type="checkbox" id="autoRecoveryToggle" checked> 自动恢复
+                            </label>
+                            <button class="btn-primary btn-sm" id="manualRecoverBtn">🔄 手动恢复</button>
+                        </div>
+                    </div>
+                    <div class="video-container">
+                        <div class="roi-indicator" id="roiIndicator">🎯 在视频上拖拽框选检测区域 (ESC取消)</div>
+                        <video id="videoElement" autoplay muted></video>
+                        <canvas id="overlayCanvas" class="video-overlay"></canvas>
+                    </div>
+                </section>
+                
+                <!-- 检测日志区 -->
+                <div class="detect-log-sidebar">
+                    <!-- 紧凑统计 -->
+                    <div class="compact-stats">
+                        <div class="cstat"><span class="cstat-val" id="totalDetections">0</span><span class="cstat-label">总检测</span></div>
+                        <div class="cstat"><span class="cstat-val" id="fpsValue">0</span><span class="cstat-label">FPS</span></div>
+                        <div class="cstat"><span class="cstat-val" id="avgConfidence">0%</span><span class="cstat-label">置信度</span></div>
+                        <div class="cstat"><span class="cstat-val" id="activeClasses">0</span><span class="cstat-label">类别</span></div>
+                    </div>
+                    
+                    <!-- 过滤统计条 -->
+                    <div class="filter-badge-bar">
+                        <span class="f-badge" id="roiFilterCount">ROI:0</span>
+                        <span class="f-badge" id="sizeFilterCount">尺寸:0</span>
+                        <span class="f-badge" id="lineFilterCount">画线:0</span>
+                        <span class="f-badge" id="trackCount">追踪:0</span>
+                    </div>
+                    
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button class="btn-secondary btn-sm" id="downloadFrameBtn" disabled>📸 下载当前帧</button>
+                        <span class="control-hint" id="frameCacheHint" style="margin:0;">开启「截帧保存」后缓存帧</span>
+                    </div>
+                    
+                    <!-- 检测日志滚动区 -->
+                    <div class="panel" style="flex:1;min-height:0;">
+                        <div class="panel-header">检测日志</div>
+                        <div class="panel-body" style="height:100%;">
+                            <div class="detection-list" id="detectionList">
+                                <div style="text-align:center;color:var(--text-secondary);padding:2rem;">等待检测结果...</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 系统日志 -->
+                    <div class="panel" style="max-height:200px;">
+                        <div class="panel-header">系统日志</div>
+                        <div class="panel-body">
+                            <div class="log-container" id="logContainer">
+                                <div class="log-line"><span class="log-time">初始</span><span class="log-message success"> 系统就绪</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tab 2: YOLO配置 -->
+        <div class="tab-content" id="tab-config">
+            <div class="config-grid">
+                <!-- 模型配置 -->
+                <div class="panel">
+                    <div class="panel-header">🤖 模型配置</div>
+                    <div class="panel-body">
+                        <div class="control-group">
+                            <label class="control-label">模型选择</label>
+                            <select class="control-select" id="modelSelect">
+                                <option value="yolov8n.pt">YOLOv8-Nano (检测)</option>
+                                <option value="yolov8n-pose.pt">YOLOv8-Pose (姿态)</option>
+                                <option value="dual">检测 + 姿态 (双模型)</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">截帧保存</label>
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <input type="checkbox" id="saveFrameToggle" style="accent-color:var(--accent-cyan);width:18px;height:18px;">
+                                <span style="font-size:0.85rem;">保存检测帧到本地</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 检测参数 -->
+                <div class="panel">
+                    <div class="panel-header">📐 检测参数</div>
+                    <div class="panel-body">
+                        <div class="control-group">
+                            <label class="control-label">置信度阈值 <span class="slider-value" id="confValue">0.25</span></label>
+                            <input type="range" class="control-slider" id="confSlider" min="0.1" max="0.9" step="0.05" value="0.25">
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">IoU 阈值 <span class="slider-value" id="iouValue">0.7</span></label>
+                            <input type="range" class="control-slider" id="iouSlider" min="0.3" max="0.9" step="0.05" value="0.7">
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">检测频次 <span class="slider-value" id="freqValue">500</span>ms</label>
+                            <input type="range" class="control-slider" id="freqSlider" min="200" max="2000" step="100" value="500">
+                        </div>
+                        <div class="control-group">
+                            <button class="btn-primary" id="toggleDetectBtn" style="width:100%;">停止检测</button>
+                        </div>
+                        <div class="control-group">
+                            <button class="btn-secondary" id="resetBtn" style="width:100%;">重置统计</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ROI过滤 -->
+                <div class="panel">
+                    <div class="panel-header">🎯 ROI 过滤</div>
+                    <div class="panel-body">
+                        <div class="control-group">
+                            <label class="control-label">检测区域</label>
+                            <div style="display:flex;gap:8px;">
+                                <button class="btn-secondary btn-sm" id="roiBtn">框选区域</button>
+                                <button class="btn-secondary btn-sm" id="roiClearBtn" style="display:none;">✕ 清除</button>
+                            </div>
+                            <span class="control-hint" id="roiHint">在检测页视频上拖拽框选</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 尺寸过滤 -->
+                <div class="panel">
+                    <div class="panel-header">📏 尺寸过滤</div>
+                    <div class="panel-body">
+                        <div class="control-group">
+                            <label class="control-label">最小宽 <span class="slider-value" id="minWValue">60</span>px</label>
+                            <input type="range" class="control-slider" id="minWSlider" min="10" max="200" step="10" value="60">
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">最小高 <span class="slider-value" id="minHValue">80</span>px</label>
+                            <input type="range" class="control-slider" id="minHSlider" min="10" max="200" step="10" value="80">
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">最大宽 <span class="slider-value" id="maxWValue">220</span>px</label>
+                            <input type="range" class="control-slider" id="maxWSlider" min="100" max="600" step="10" value="220">
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">最大高 <span class="slider-value" id="maxHValue">280</span>px</label>
+                            <input type="range" class="control-slider" id="maxHSlider" min="100" max="600" step="10" value="280">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 追踪配置 -->
+                <div class="panel">
+                    <div class="panel-header">🔴 追踪配置</div>
+                    <div class="panel-body">
+                        <div class="control-group">
+                            <label class="control-label">目标追踪</label>
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <input type="checkbox" id="trackingToggle" checked style="accent-color:var(--accent-red);width:18px;height:18px;">
+                                <span style="color:var(--accent-red);font-size:0.85rem;" id="trackingLabel">已开启</span>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">追踪阈值 <span class="slider-value" id="trackThreshValue">0.3</span></label>
+                            <input type="range" class="control-slider" id="trackThreshSlider" min="0.1" max="0.6" step="0.05" value="0.3">
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">轨迹长度 <span class="slider-value" id="trailLenValue">30</span>帧</label>
+                            <input type="range" class="control-slider" id="trailLenSlider" min="10" max="1000" step="10" value="30">
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">轨迹精度 <span class="slider-value" id="trailPrecValue">10</span>px</label>
+                            <input type="range" class="control-slider" id="trailPrecSlider" min="1" max="50" step="1" value="10">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 画线圈选 -->
+                <div class="panel">
+                    <div class="panel-header">🟣 画线圈选</div>
+                    <div class="panel-body">
+                        <div class="control-group">
+                            <label class="control-label">多边形区域</label>
+                            <div style="display:flex;gap:8px;">
+                                <button class="btn-secondary btn-sm" id="lineDrawBtn">✏️ 画线圈选</button>
+                                <button class="btn-secondary btn-sm" id="lineClearBtn" style="display:none;">✕ 清除</button>
+                            </div>
+                            <span class="control-hint" id="lineHint">在检测页视频上点击定义多边形</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 底部信息栏 -->
+        <footer class="footer">
+            <div>
+                Powered by <strong>YOLOv26</strong> + <strong>MediaMTX</strong> + <strong>FFmpeg</strong>
+            </div>
+            <div class="footer-links">
+                <a href="http://localhost:8000/docs" class="footer-link" target="_blank">API 文档</a>
+                <a href="https://docs.ultralytics.com/" class="footer-link" target="_blank">Ultralytics YOLOv8 文档</a>
+                <a href="https://github.com/ultralytics/ultralytics" class="footer-link" target="_blank">GitHub</a>
+            </div>
+        </footer>
+    </div>
+    
+    <script>
+        // YOLOv26 实时检测系统 - 前端逻辑
+        
+        // DOM 元素
+        const videoElement = document.getElementById('videoElement');
+        const overlayCanvas = document.getElementById('overlayCanvas');
+        const streamStatus = document.getElementById('streamStatus');
+        const streamStatusText = document.getElementById('streamStatusText');
+        const detectStatus = document.getElementById('detectStatus');
+        const detectStatusText = document.getElementById('detectStatusText');
+        const totalDetections = document.getElementById('totalDetections');
+        const fpsValue = document.getElementById('fpsValue');
+        const avgConfidence = document.getElementById('avgConfidence');
+        const activeClasses = document.getElementById('activeClasses');
+        const detectionList = document.getElementById('detectionList');
+        const modelSelect = document.getElementById('modelSelect');
+        const confSlider = document.getElementById('confSlider');
+        const confValue = document.getElementById('confValue');
+        const iouSlider = document.getElementById('iouSlider');
+        const iouValue = document.getElementById('iouValue');
+        const freqSlider = document.getElementById('freqSlider');
+        const freqValue = document.getElementById('freqValue');
+        const toggleDetectBtn = document.getElementById('toggleDetectBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const logContainer = document.getElementById('logContainer');
+        const roiBtn = document.getElementById('roiBtn');
+        const roiClearBtn = document.getElementById('roiClearBtn');
+        const roiHint = document.getElementById('roiHint');
+        const roiIndicator = document.getElementById('roiIndicator');
+        const minWSlider = document.getElementById('minWSlider');
+        const minWValue = document.getElementById('minWValue');
+        const minHSlider = document.getElementById('minHSlider');
+        const minHValue = document.getElementById('minHValue');
+        const maxWSlider = document.getElementById('maxWSlider');
+        const maxWValue = document.getElementById('maxWValue');
+        const maxHSlider = document.getElementById('maxHSlider');
+        const maxHValue = document.getElementById('maxHValue');
+        const roiFilterCount = document.getElementById('roiFilterCount');
+        const sizeFilterCount = document.getElementById('sizeFilterCount');
+        const trackingToggle = document.getElementById('trackingToggle');
+        const trackingLabel = document.getElementById('trackingLabel');
+        const trackThreshSlider = document.getElementById('trackThreshSlider');
+        const trackThreshValue = document.getElementById('trackThreshValue');
+        const trailLenSlider = document.getElementById('trailLenSlider');
+        const trailLenValue = document.getElementById('trailLenValue');
+        const trailPrecSlider = document.getElementById('trailPrecSlider');
+        const trailPrecValue = document.getElementById('trailPrecValue');
+        const trackCount = document.getElementById('trackCount');
+        const lineDrawBtn = document.getElementById('lineDrawBtn');
+        const lineClearBtn = document.getElementById('lineClearBtn');
+        const lineHint = document.getElementById('lineHint');
+        const lineFilterCount = document.getElementById('lineFilterCount');
+        const saveFrameToggle = document.getElementById('saveFrameToggle');
+        const downloadFrameBtn = document.getElementById('downloadFrameBtn');
+        const frameCacheHint = document.getElementById('frameCacheHint');
+        const recoveryBar = document.getElementById('recoveryBar');
+        const recoveryStatus = document.getElementById('recoveryStatus');
+        const autoRecoveryToggle = document.getElementById('autoRecoveryToggle');
+        const manualRecoverBtn = document.getElementById('manualRecoverBtn');
+        
+        // 状态变量
+        let isDetecting = true;
+        let detectionCount = 0;
+        let frameCount = 0;
+        let lastTime = performance.now();
+        let currentFps = 0;
+        let hls = null;
+        
+        // ROI 相关变量
+        let roi = null;                    // {x1, y1, x2, y2} 归一化坐标 (0~1)
+        let isDrawingRoi = false;          // 是否正在绘制 ROI
+        let roiDrawing = false;            // 是否处于 ROI 绘制模式
+        let roiStartX = 0, roiStartY = 0;  // 绘制起点（视频内像素坐标）
+        let roiFilteredTotal = 0;          // ROI 过滤累计数
+        let sizeFilteredTotal = 0;         // 尺寸过滤累计数
+        
+        // 追踪相关变量
+        let trackHistory = {};           // { track_id: [{cx, cy, ts}, ...] }
+        let nextTrackId = 1;
+        let trackIdMap = new Map();
+        let trackingActive = true;
+        
+        // 画线相关变量
+        let linePoints = [];            // [{x, y}] 归一化坐标
+        let isDrawingLine = false;
+        let lineFilteredTotal = 0;
+        
+        // 截帧缓存
+        let latestFrameBlob = null;
+        
+        // 恢复状态
+        let recoveryAttempts = 0;
+        let recoveryTimer = null;
+        const MAX_RECOVERY = 10;
+        
+        // ========== 流恢复 ==========
+        function showRecoveryBar(msg) {
+            recoveryBar.style.display = 'flex';
+            recoveryStatus.textContent = msg || '尝试自动重连中...';
+        }
+        function hideRecoveryBar() {
+            recoveryBar.style.display = 'none';
+            recoveryAttempts = 0;
+            clearTimeout(recoveryTimer);
+        }
+        
+        function tryRecoverHLS() {
+            if (!autoRecoveryToggle.checked) {
+                recoveryStatus.textContent = '自动恢复已关闭，请手动恢复';
+                return;
+            }
+            if (recoveryAttempts >= MAX_RECOVERY) {
+                recoveryStatus.textContent = `已重试${MAX_RECOVERY}次，请手动恢复`;
+                return;
+            }
+            recoveryAttempts++;
+            showRecoveryBar(`第${recoveryAttempts}/${MAX_RECOVERY}次重连...`);
+            addLog(`自动恢复: 第${recoveryAttempts}次重连`, 'info');
+            
+            // 销毁旧 HLS 实例
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+            
+            // 重新创建
+            if (Hls.isSupported()) {
+                hls = new Hls({ debug: false, enableWorker: true, lowLatencyMode: true });
+                hls.loadSource('http://localhost:8888/mystream/index.m3u8');
+                hls.attachMedia(videoElement);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    hideRecoveryBar();
+                    streamStatus.className = 'status-dot active';
+                    streamStatusText.textContent = '流已连接';
+                    addLog('HLS 流恢复成功', 'success');
+                    videoElement.play();
+                });
+                
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    addLog(`HLS 错误: ${data.type}`, 'error');
+                    streamStatus.className = 'status-dot inactive';
+                    streamStatusText.textContent = '流断开';
+                    if (data.fatal) {
+                        recoveryTimer = setTimeout(tryRecoverHLS, 2000);
+                    }
+                });
+            }
+        }
+        
+        function manualRecover() {
+            recoveryAttempts = 0;
+            clearTimeout(recoveryTimer);
+            showRecoveryBar('手动恢复中...');
+            tryRecoverHLS();
+        }
+        
+        // 初始化
+        function init() {
+            // 加载已保存的配置
+            loadConfig();
+            
+            addLog('正在初始化 HLS 播放器...', 'info');
+            
+            // 初始化 HLS 播放器
+            if (Hls.isSupported()) {
+                hls = new Hls({
+                    debug: false,
+                    enableWorker: true,
+                    lowLatencyMode: true
+                });
+                
+                hls.loadSource('http://localhost:8888/mystream/index.m3u8');
+                hls.attachMedia(videoElement);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    addLog('HLS 流已连接', 'success');
+                    hideRecoveryBar();
+                    streamStatus.className = 'status-dot active';
+                    streamStatusText.textContent = '流已连接';
+                    videoElement.play();
+                });
+                
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    addLog(`HLS 错误: ${data.type}`, 'error');
+                    streamStatus.className = 'status-dot inactive';
+                    streamStatusText.textContent = '流断开';
+                    if (data.fatal) {
+                        showRecoveryBar();
+                        recoveryTimer = setTimeout(tryRecoverHLS, 2000);
+                    }
+                });
+            } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+                // Safari 原生支持 HLS
+                videoElement.src = 'http://localhost:8888/mystream/index.m3u8';
+                videoElement.addEventListener('loadedmetadata', () => {
+                    addLog('HLS 流已连接 (Safari)', 'success');
+                    videoElement.play();
+                });
+            }
+            
+            // 开始检测循环
+            startDetectionLoop();
+            
+            // 事件监听
+            confSlider.addEventListener('input', () => {
+                confValue.textContent = confSlider.value;
+                saveConfig();
+            });
+            
+            iouSlider.addEventListener('input', () => {
+                iouValue.textContent = iouSlider.value;
+                saveConfig();
+            });
+            
+            freqSlider.addEventListener('input', () => {
+                freqValue.textContent = freqSlider.value;
+                saveConfig();
+            });
+            
+            toggleDetectBtn.addEventListener('click', toggleDetection);
+            resetBtn.addEventListener('click', resetStats);
+            
+            // ROI 按钮事件
+            roiBtn.addEventListener('click', toggleRoiMode);
+            roiClearBtn.addEventListener('click', clearRoi);
+            
+            // 尺寸过滤滑块事件
+            minWSlider.addEventListener('input', () => { minWValue.textContent = minWSlider.value; saveConfig(); });
+            minHSlider.addEventListener('input', () => { minHValue.textContent = minHSlider.value; saveConfig(); });
+            maxWSlider.addEventListener('input', () => { maxWValue.textContent = maxWSlider.value; saveConfig(); });
+            maxHSlider.addEventListener('input', () => { maxHValue.textContent = maxHSlider.value; saveConfig(); });
+            
+            // 模型选择变更
+            modelSelect.addEventListener('change', saveConfig);
+            
+            // ROI 绘制事件（绑定到 video-container）
+            const videoContainer = videoElement.parentElement;
+            videoContainer.addEventListener('mousedown', onRoiMouseDown);
+            videoContainer.addEventListener('mousemove', onRoiMouseMove);
+            videoContainer.addEventListener('mouseup', onRoiMouseUp);
+            document.addEventListener('keydown', onRoiKeyDown);
+            
+            // 追踪开关
+            trackingToggle.addEventListener('change', () => {
+                trackingActive = trackingToggle.checked;
+                trackingLabel.textContent = trackingActive ? '已开启' : '已关闭';
+                if (!trackingActive) { trackHistory = {}; nextTrackId = 1; }
+                saveConfig();
+            });
+            
+            // 追踪参数
+            trackThreshSlider.addEventListener('input', () => { trackThreshValue.textContent = trackThreshSlider.value; saveConfig(); });
+            trailLenSlider.addEventListener('input', () => { trailLenValue.textContent = trailLenSlider.value; saveConfig(); });
+            trailPrecSlider.addEventListener('input', () => { trailPrecValue.textContent = trailPrecSlider.value; saveConfig(); });
+            
+            // 画线按钮
+            lineDrawBtn.addEventListener('click', toggleLineMode);
+            lineClearBtn.addEventListener('click', clearLines);
+            updateVideoClickHandler();
+            
+            // 恢复按钮
+            manualRecoverBtn.addEventListener('click', manualRecover);
+            
+            // 视频循环
+            videoElement.addEventListener('ended', () => {
+                videoElement.currentTime = 0;
+                videoElement.play();
+            });
+            
+            // Tab 切换
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    btn.classList.add('active');
+                    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+                });
+            });
+            
+            // 下载帧按钮
+            downloadFrameBtn.addEventListener('click', () => {
+                if (!latestFrameBlob) return;
+                const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                const url = URL.createObjectURL(latestFrameBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `detect_${ts}.jpg`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+                addLog(`已下载检测帧 detect_${ts}.jpg`, 'success');
+            });
+            
+            addLog('系统初始化完成', 'success');
+        }
+        
+        // 开始检测循环
+        function startDetectionLoop() {
+            if (!isDetecting) return;
+            
+            const interval = parseInt(freqSlider.value) || 500;
+            setTimeout(() => {
+                detectFrame();
+                startDetectionLoop();
+            }, interval);
+        }
+        
+        // 检测帧
+        async function detectFrame() {
+            if (!isDetecting || videoElement.readyState < 2) return;
+            
+            try {
+                // 创建 canvas 捕获帧
+                const canvas = document.createElement('canvas');
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(videoElement, 0, 0);
+                
+                // 转换为 blob（共用同一帧）
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+                
+                // 截帧缓存
+                if (saveFrameToggle.checked) {
+                    latestFrameBlob = blob;
+                    downloadFrameBtn.disabled = false;
+                    frameCacheHint.textContent = '检测帧已缓存，点击下载';
+                }
+                
+                const selectedModel = modelSelect.value;
+                
+                if (selectedModel === 'dual') {
+                    // 双模型模式：检测 + 姿态
+                    const [detResult, poseResult] = await Promise.all([
+                        sendToAPI(blob, 'yolov8n.pt'),
+                        sendToAPI(blob, 'yolov8n-pose.pt')
+                    ]);
+                    
+                    // 合并结果 → 只保留人 → 尺寸过滤 → 画线过滤 → ROI 过滤
+                    let merged = (detResult.detections || []).concat(poseResult.detections || []);
+                    merged = filterByClass(merged);
+                    merged = filterBySize(merged);
+                    merged = filterByLines(merged);
+                    merged = filterByRoi(merged);
+                    merged = matchTracks(merged);
+                    updateDetections({ detections: merged, count: merged.length });
+                } else {
+                    // 单模型模式 → 只保留人 → 尺寸过滤 → 画线过滤 → ROI 过滤
+                    let data = await sendToAPI(blob, selectedModel);
+                    let dets = data.detections || [];
+                    dets = filterByClass(dets);
+                    dets = filterBySize(dets);
+                    dets = filterByLines(dets);
+                    dets = filterByRoi(dets);
+                    dets = matchTracks(dets);
+                    updateDetections({ detections: dets, count: dets.length });
+                }
+                
+                // 更新 FPS
+                frameCount++;
+                const now = performance.now();
+                if (now - lastTime >= 1000) {
+                    currentFps = Math.round(frameCount * 1000 / (now - lastTime));
+                    fpsValue.textContent = currentFps;
+                    frameCount = 0;
+                    lastTime = now;
+                }
+                
+            } catch (error) {
+                // 静默失败，避免日志刷屏
+            }
+        }
+        
+        // 发送检测请求到 API
+        async function sendToAPI(blob, modelName) {
+            const formData = new FormData();
+            formData.append('file', blob, 'frame.jpg');
+            formData.append('model_name', modelName);
+            formData.append('conf', confSlider.value);
+            formData.append('iou', iouSlider.value);
+            
+            const response = await fetch('http://localhost:8000/predict', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                console.error(`API ${modelName} 请求失败: ${response.status}`);
+                return { detections: [], count: 0, success: false };
+            }
+            
+            const data = await response.json();
+            // 标记结果来源模型
+            data.detections.forEach(d => d.model = modelName);
+            return data;
+        }
+        
+        // ========== 追踪系统 ==========
+        
+        // IOU 计算
+        function calcIOU(a, b) {
+            const ax1 = a.bbox[0], ay1 = a.bbox[1], ax2 = a.bbox[2], ay2 = a.bbox[3];
+            const bx1 = b.bbox[0], by1 = b.bbox[1], bx2 = b.bbox[2], by2 = b.bbox[3];
+            const ix = Math.max(0, Math.min(ax2, bx2) - Math.max(ax1, bx1));
+            const iy = Math.max(0, Math.min(ay2, by2) - Math.max(ay1, by1));
+            const inter = ix * iy;
+            const areaA = (ax2 - ax1) * (ay2 - ay1);
+            const areaB = (bx2 - bx1) * (by2 - by1);
+            return inter / (areaA + areaB - inter + 0.001);
+        }
+        
+        // 追踪匹配：将当前帧检测结果匹配到历史 track
+        function matchTracks(detections) {
+            if (!trackingActive || detections.length === 0) return detections;
+            
+            const threshold = parseFloat(trackThreshSlider.value);
+            const prevTracks = Object.keys(trackHistory).map(Number);
+            const assigned = new Set();
+            const newTrackMap = new Map();
+            
+            // 获取上一帧每个 track 的最新检测框
+            const prevBoxes = {};
+            for (const tid of prevTracks) {
+                const hist = trackHistory[tid];
+                if (hist.length > 0) {
+                    const last = hist[hist.length - 1];
+                    prevBoxes[tid] = last;
+                }
+            }
+            
+            // 匈牙利式贪心匹配
+            const matches = [];
+            for (const tid of prevTracks) {
+                if (!prevBoxes[tid]) continue;
+                let bestIdx = -1, bestIOU = 0;
+                for (let i = 0; i < detections.length; i++) {
+                    if (assigned.has(i)) continue;
+                    const iou = calcIOU({ bbox: prevBoxes[tid].bbox }, detections[i]);
+                    if (iou > bestIOU) { bestIOU = iou; bestIdx = i; }
+                }
+                if (bestIdx >= 0 && bestIOU >= threshold) {
+                    matches.push({ tid, idx: bestIdx, iou: bestIOU });
+                    assigned.add(bestIdx);
+                }
+            }
+            
+            // 应用匹配结果
+            for (const { tid, idx } of matches) {
+                detections[idx].track_id = tid;
+                detections[idx]._matched = true;
+            }
+            
+            // 未匹配的分配新 track_id
+            for (let i = 0; i < detections.length; i++) {
+                if (!detections[i]._matched) {
+                    detections[i].track_id = nextTrackId++;
+                }
+            }
+            
+            // 更新轨迹历史
+            const now = performance.now();
+            const activeIds = new Set();
+            const prec = parseInt(trailPrecSlider.value) || 10;
+            for (const d of detections) {
+                const tid = d.track_id;
+                activeIds.add(tid);
+                if (!trackHistory[tid]) trackHistory[tid] = [];
+                const cx = (d.bbox[0] + d.bbox[2]) / 2;
+                const cy = (d.bbox[1] + d.bbox[3]) / 2;
+                // 精度过滤：距离上次记录点 < prec px 则跳过
+                const hist = trackHistory[tid];
+                if (hist.length > 0) {
+                    const last = hist[hist.length - 1];
+                    const dx = cx - last.cx, dy = cy - last.cy;
+                    if (Math.sqrt(dx*dx + dy*dy) < prec) continue;
+                }
+                trackHistory[tid].push({ cx, cy, bbox: d.bbox, ts: now });
+                // 限制轨迹长度
+                const maxLen = parseInt(trailLenSlider.value);
+                while (trackHistory[tid].length > maxLen) {
+                    trackHistory[tid].shift();
+                }
+            }
+            
+            // 清理丢失的 track
+            for (const tid of prevTracks) {
+                if (!activeIds.has(tid)) {
+                    delete trackHistory[tid];
+                }
+            }
+            
+            trackCount.textContent = `活跃追踪: ${activeIds.size}`;
+            return detections;
+        }
+        
+        // 绘制轨迹线
+        function drawTrajectories(ctx) {
+            if (!trackingActive) return;
+            
+            const now = performance.now();
+            const maxLen = parseInt(trailLenSlider.value);
+            
+            for (const tid in trackHistory) {
+                const hist = trackHistory[tid];
+                if (hist.length < 2) continue;
+                
+                // 轨迹线（红色渐变透明度）
+                for (let i = 1; i < hist.length; i++) {
+                    const alpha = 0.3 + 0.7 * (i / hist.length); // 越新越亮
+                    ctx.strokeStyle = `rgba(255, 50, 50, ${alpha})`;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(hist[i - 1].cx, hist[i - 1].cy);
+                    ctx.lineTo(hist[i].cx, hist[i].cy);
+                    ctx.stroke();
+                }
+                
+                // 轨迹点
+                const last = hist[hist.length - 1];
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.arc(last.cx, last.cy, 4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // track_id 标签
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.9)';
+                ctx.font = '10px JetBrains Mono';
+                ctx.fillText(`#${tid}`, last.cx + 6, last.cy - 6);
+            }
+        }
+        
+        // ========== 画线圈选 ==========
+        
+        function toggleLineMode() {
+            isDrawingLine = !isDrawingLine;
+            if (isDrawingLine) {
+                overlayCanvas.classList.add('roi-active');
+                lineDrawBtn.textContent = '🔒 完成画线';
+                lineHint.textContent = '在视频上点击添加顶点，拖拽调整';
+                addLog('画线模式已激活 - 点击视频添加顶点', 'info');
+            } else {
+                overlayCanvas.classList.remove('roi-active');
+                lineDrawBtn.textContent = '✏️ 画线圈选';
+                if (linePoints.length >= 3) {
+                    lineClearBtn.style.display = 'inline-block';
+                    lineHint.textContent = `已定义 ${linePoints.length} 边形区域`;
+                }
+            }
+        }
+        
+        function clearLines() {
+            linePoints = [];
+            lineClearBtn.style.display = 'none';
+            lineDrawBtn.textContent = '✏️ 画线圈选';
+            lineHint.textContent = '点击按钮后在视频上点击定义多边形区域';
+            lineFilteredTotal = 0;
+            lineFilterCount.textContent = '画线过滤: 0';
+            isDrawingLine = false;
+            overlayCanvas.classList.remove('roi-active');
+            addLog('画线已清除', 'info');
+        }
+        
+        // 点是否在多边形内
+        function pointInPolygon(px, py, polygon) {
+            let inside = false;
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const xi = polygon[i].x, yi = polygon[i].y;
+                const xj = polygon[j].x, yj = polygon[j].y;
+                if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) {
+                    inside = !inside;
+                }
+            }
+            return inside;
+        }
+        
+        // 按画线多边形过滤
+        function filterByLines(detections) {
+            if (linePoints.length < 3) return detections;
+            
+            const scaled = linePoints.map(p => ({
+                x: p.x * videoElement.videoWidth,
+                y: p.y * videoElement.videoHeight
+            }));
+            
+            const before = detections.length;
+            const filtered = detections.filter(d => {
+                const cx = (d.bbox[0] + d.bbox[2]) / 2;
+                const cy = (d.bbox[1] + d.bbox[3]) / 2;
+                return pointInPolygon(cx, cy, scaled);
+            });
+            lineFilteredTotal += (before - filtered.length);
+            lineFilterCount.textContent = `画线过滤: ${lineFilteredTotal}`;
+            return filtered;
+        }
+        
+        // 鼠标点击处理（画线模式）
+        function onLineClick(e) {
+            if (!isDrawingLine) return;
+            const rect = videoElement.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width;
+            const y = (e.clientY - rect.top) / rect.height;
+            linePoints.push({ x, y });
+            addLog(`画线顶点 ${linePoints.length}: (${(x*100).toFixed(0)}%, ${(y*100).toFixed(0)}%)`, 'info');
+        }
+        
+        // 更新视频容器点击事件
+        function updateVideoClickHandler() {
+            const videoContainer = videoElement.parentElement;
+            videoContainer.removeEventListener('click', onLineClick);
+            videoContainer.addEventListener('click', onLineClick);
+        }
+        
+        // 更新检测结果
+        function updateDetections(data) {
+            detectionCount += data.count;
+            totalDetections.textContent = detectionCount;
+            
+            // 更新平均置信度
+            if (data.detections.length > 0) {
+                const avgConf = data.detections.reduce((sum, d) => sum + d.confidence, 0) / data.detections.length;
+                avgConfidence.textContent = (avgConf * 100).toFixed(1) + '%';
+            }
+            
+            // 更新活跃类别
+            const classes = new Set(data.detections.map(d => d.class_name));
+            activeClasses.textContent = classes.size;
+            
+            // 更新检测列表
+            updateDetectionList(data.detections);
+            
+            // 更新覆盖层
+            updateOverlay(data.detections);
+        }
+        
+        // 更新检测列表
+        function updateDetectionList(detections) {
+            if (detections.length === 0) return;
+            
+            detectionList.innerHTML = '';
+            
+            detections.forEach((detection, index) => {
+                const item = document.createElement('div');
+                item.className = 'detection-item';
+                const modelTag = detection.model === 'yolov8n-pose.pt' ? '姿态' : '检测';
+                const tagColor = detection.model === 'yolov8n-pose.pt' ? '#00f5ff' : '#bfff00';
+                item.innerHTML = `
+                    <div class="detection-class">
+                        <span style="color:${tagColor};font-size:0.7rem;margin-right:4px;">[${modelTag}]</span>
+                        ${index + 1}. ${detection.class_name}
+                    </div>
+                    <div class="detection-info">
+                        <span>置信度: ${(detection.confidence * 100).toFixed(1)}%</span>
+                        <span>坐标: [${detection.bbox.map(b => b.toFixed(0)).join(', ')}]</span>
+                    </div>
+                `;
+                detectionList.appendChild(item);
+            });
+        }
+        
+        // 更新覆盖层
+        function updateOverlay(detections) {
+            const ctx = overlayCanvas.getContext('2d');
+            overlayCanvas.width = videoElement.videoWidth;
+            overlayCanvas.height = videoElement.videoHeight;
+            
+            ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            
+            // 绘制 ROI 区域
+            if (roi && !roiDrawing) {
+                const rx = roi.x1 * overlayCanvas.width;
+                const ry = roi.y1 * overlayCanvas.height;
+                const rw = (roi.x2 - roi.x1) * overlayCanvas.width;
+                const rh = (roi.y2 - roi.y1) * overlayCanvas.height;
+                
+                // 外部暗色遮罩（top/bottom/left/right 四块）
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+                ctx.fillRect(0, 0, overlayCanvas.width, ry);                    // top
+                ctx.fillRect(0, ry + rh, overlayCanvas.width, overlayCanvas.height - ry - rh); // bottom
+                ctx.fillRect(0, ry, rx, rh);                                     // left
+                ctx.fillRect(rx + rw, ry, overlayCanvas.width - rx - rw, rh);    // right
+                
+                // ROI 边框
+                ctx.strokeStyle = '#ff6600';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([8, 4]);
+                ctx.strokeRect(rx, ry, rw, rh);
+                ctx.setLineDash([]);
+                
+                // ROI 标签
+                ctx.fillStyle = '#ff6600';
+                ctx.font = '11px JetBrains Mono';
+                ctx.fillText('📐 检测区域', rx + 6, ry - 8 > 16 ? ry - 8 : ry + 16);
+            }
+            
+            detections.forEach(detection => {
+                const [x1, y1, x2, y2] = detection.bbox;
+                const isPose = detection.model === 'yolov8n-pose.pt';
+                const color = isPose ? '#00f5ff' : '#bfff00';
+                
+                // 绘制边界框
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                
+                // 绘制半透明背景
+                ctx.fillStyle = isPose ? 'rgba(0, 245, 255, 0.1)' : 'rgba(191, 255, 0, 0.1)';
+                ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+                
+                // 绘制标签
+                const modelTag = isPose ? '姿态' : '检测';
+                const label = `[${modelTag}] ${detection.class_name} ${(detection.confidence * 100).toFixed(1)}%`;
+                ctx.font = '16px JetBrains Mono';
+                const labelWidth = ctx.measureText(label).width;
+                
+                ctx.fillStyle = color;
+                ctx.fillRect(x1, y1 - 24, labelWidth + 16, 24);
+                
+                ctx.fillStyle = '#0a0a0f';
+                ctx.fillText(label, x1 + 8, y1 - 6);
+            });
+            
+            // 绘制轨迹线
+            drawTrajectories(ctx);
+            
+            // 绘制画线多边形
+            if (linePoints.length >= 3) {
+                const pts = linePoints.map(p => ({
+                    x: p.x * overlayCanvas.width,
+                    y: p.y * overlayCanvas.height
+                }));
+                
+                // 填充
+                ctx.fillStyle = 'rgba(138, 43, 226, 0.08)';
+                ctx.beginPath();
+                ctx.moveTo(pts[0].x, pts[0].y);
+                for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+                ctx.closePath();
+                ctx.fill();
+                
+                // 边界
+                ctx.strokeStyle = '#8a2be2';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([6, 3]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                // 顶点
+                ctx.fillStyle = '#8a2be2';
+                pts.forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            }
+        }
+        
+        // 切换检测状态
+        function toggleDetection() {
+            isDetecting = !isDetecting;
+            
+            if (isDetecting) {
+                toggleDetectBtn.textContent = '停止检测';
+                detectStatus.className = 'status-dot active';
+                detectStatusText.textContent = '检测中';
+                addLog('检测已恢复', 'success');
+                startDetectionLoop();
+            } else {
+                toggleDetectBtn.textContent = '开始检测';
+                detectStatus.className = 'status-dot inactive';
+                detectStatusText.textContent = '已停止';
+                addLog('检测已停止', 'info');
+            }
+        }
+        
+        // 重置统计
+        function resetStats() {
+            detectionCount = 0;
+            frameCount = 0;
+            currentFps = 0;
+            roiFilteredTotal = 0;
+            sizeFilteredTotal = 0;
+            lineFilteredTotal = 0;
+            trackHistory = {};
+            nextTrackId = 1;
+            
+            totalDetections.textContent = '0';
+            fpsValue.textContent = '0';
+            avgConfidence.textContent = '0%';
+            activeClasses.textContent = '0';
+            roiFilterCount.textContent = 'ROI过滤: 0';
+            sizeFilterCount.textContent = '尺寸过滤: 0';
+            lineFilterCount.textContent = '画线过滤: 0';
+            trackCount.textContent = '活跃追踪: 0';
+            detectionList.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;">等待检测结果...</div>';
+            
+            const ctx = overlayCanvas.getContext('2d');
+            ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            
+            addLog('统计已重置', 'info');
+        }
+        
+        // ========== ROI 区域框选功能 ==========
+        
+        // 获取鼠标在视频内的相对坐标（像素值和归一化值）
+        function getVideoCoords(e) {
+            const rect = videoElement.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            return {
+                px: { x, y },
+                norm: { x: x / rect.width, y: y / rect.height }
+            };
+        }
+        
+        // 切换 ROI 绘制模式
+        function toggleRoiMode() {
+            roiDrawing = !roiDrawing;
+            if (roiDrawing) {
+                overlayCanvas.classList.add('roi-active');
+                roiIndicator.classList.add('active');
+                roiBtn.textContent = '🔒 确认区域';
+                roiHint.textContent = '拖拽框选就餐座位区域,按ESC取消';
+                addLog('ROI 绘制模式已激活', 'info');
+            } else {
+                overlayCanvas.classList.remove('roi-active');
+                roiIndicator.classList.remove('active');
+                roiBtn.textContent = '🎯 框选区域';
+                if (roi) {
+                    roiHint.textContent = `已框选区域，点击按钮重新框选`;
+                }
+            }
+        }
+        
+        // 清除 ROI
+        function clearRoi() {
+            roi = null;
+            roiClearBtn.style.display = 'none';
+            roiBtn.textContent = '🎯 框选区域';
+            roiHint.textContent = '点击按钮后在视频上拖拽框选就餐区域';
+            roiDrawing = false;
+            overlayCanvas.classList.remove('roi-active');
+            roiIndicator.classList.remove('active');
+            roiFilteredTotal = 0;
+            roiFilterCount.textContent = 'ROI过滤: 0';
+            addLog('ROI 已清除', 'info');
+        }
+        
+        // 鼠标按下：开始绘制选区
+        function onRoiMouseDown(e) {
+            if (!roiDrawing) return;
+            const coords = getVideoCoords(e);
+            roiStartX = coords.norm.x;
+            roiStartY = coords.norm.y;
+            isDrawingRoi = true;
+        }
+        
+        // 鼠标移动：更新选区预览
+        function onRoiMouseMove(e) {
+            if (!roiDrawing || !isDrawingRoi) return;
+            const coords = getVideoCoords(e);
+            const ctx = overlayCanvas.getContext('2d');
+            // 保持canvas为视频原生分辨率，使用归一化坐标缩放
+            overlayCanvas.width = videoElement.videoWidth || 1920;
+            overlayCanvas.height = videoElement.videoHeight || 1080;
+            ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            // 缩放到视频像素坐标
+            const sx = roiStartX * overlayCanvas.width;
+            const sy = roiStartY * overlayCanvas.height;
+            const ex = coords.norm.x * overlayCanvas.width;
+            const ey = coords.norm.y * overlayCanvas.height;
+            const rx = Math.min(sx, ex), ry = Math.min(sy, ey);
+            const rw = Math.abs(ex - sx), rh = Math.abs(ey - sy);
+            // 半透明暗色遮罩
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            ctx.clearRect(rx, ry, rw, rh);
+            ctx.strokeStyle = '#00f5ff';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 3]);
+            ctx.strokeRect(rx, ry, rw, rh);
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#00f5ff';
+            ctx.font = '12px JetBrains Mono';
+            ctx.fillText(`${Math.round(rw)}×${Math.round(rh)}`, rx + 4, ry - 8 > 16 ? ry - 8 : ry + 16);
+        }
+        
+        // 鼠标松开：完成选区
+        function onRoiMouseUp(e) {
+            if (!roiDrawing || !isDrawingRoi) return;
+            isDrawingRoi = false;
+            const coords = getVideoCoords(e);
+            const rect = videoElement.getBoundingClientRect();
+            
+            const x1 = Math.min(roiStartX, coords.norm.x);
+            const y1 = Math.min(roiStartY, coords.norm.y);
+            const x2 = Math.max(coords.norm.x, roiStartX);
+            const y2 = Math.max(coords.norm.y, roiStartY);
+            
+            // 过滤太小的选区(<10px)
+            if ((x2 - x1) * rect.width < 10 || (y2 - y1) * rect.height < 10) return;
+            
+            roi = { x1, y1, x2, y2 };
+            roiClearBtn.style.display = 'inline-block';
+            roiDrawing = false;
+            overlayCanvas.classList.remove('roi-active');
+            roiIndicator.classList.remove('active');
+            roiBtn.textContent = '🎯 框选区域';
+            roiHint.textContent = `已框选检测区域 [${(x1*100).toFixed(0)}%,${(y1*100).toFixed(0)}% → ${(x2*100).toFixed(0)}%,${(y2*100).toFixed(0)}%]`;
+            addLog(`ROI 已设置 (${(x2-x1)*rect.width|0}×${(y2-y1)*rect.height|0}px)`, 'success');
+        }
+        
+        // ESC 取消绘制
+        function onRoiKeyDown(e) {
+            if (e.key === 'Escape' && roiDrawing) {
+                roiDrawing = false;
+                isDrawingRoi = false;
+                overlayCanvas.classList.remove('roi-active');
+                roiIndicator.classList.remove('active');
+                roiBtn.textContent = '🎯 框选区域';
+                roiHint.textContent = roi ? `已框选区域，点击按钮重新框选` : '点击按钮后在视频上拖拽框选就餐区域';
+                addLog('ROI 绘制已取消', 'info');
+            }
+        }
+        
+        // 按 ROI 过滤检测结果（只保留中心点在 ROI 内的）
+        function filterByRoi(detections) {
+            if (!roi) return detections;
+            const before = detections.length;
+            const filtered = detections.filter(d => {
+                const [x1, y1, x2, y2] = d.bbox;
+                const cx = (x1 + x2) / 2 / videoElement.videoWidth;
+                const cy = (y1 + y2) / 2 / videoElement.videoHeight;
+                return cx >= roi.x1 && cx <= roi.x2 && cy >= roi.y1 && cy <= roi.y2;
+            });
+            roiFilteredTotal += (before - filtered.length);
+            roiFilterCount.textContent = `ROI过滤: ${roiFilteredTotal}`;
+            return filtered;
+        }
+        
+        // 只保留 person 类
+        function filterByClass(detections) {
+            return detections.filter(d => d.class_name === 'person');
+        }
+        
+        // 按检测框尺寸过滤（基于 1920x1080 参考分辨率缩放）
+        function filterBySize(detections) {
+            const refW = 1920, refH = 1080;
+            const actualW = videoElement.videoWidth || refW;
+            const actualH = videoElement.videoHeight || refH;
+            const scaleW = actualW / refW;
+            const scaleH = actualH / refH;
+            
+            const minW = parseFloat(minWSlider.value) * scaleW;
+            const minH = parseFloat(minHSlider.value) * scaleH;
+            const maxW = parseFloat(maxWSlider.value) * scaleW;
+            const maxH = parseFloat(maxHSlider.value) * scaleH;
+            
+            const before = detections.length;
+            const filtered = detections.filter(d => {
+                const [x1, y1, x2, y2] = d.bbox;
+                const bw = x2 - x1;
+                const bh = y2 - y1;
+                return bw >= minW && bh >= minH && bw <= maxW && bh <= maxH;
+            });
+            sizeFilteredTotal += (before - filtered.length);
+            sizeFilterCount.textContent = `尺寸过滤: ${sizeFilteredTotal}`;
+            return filtered;
+        }
+        
+        // 添加日志
+        function addLog(message, type = 'info') {
+            const now = new Date();
+            const time = now.toTimeString().slice(0, 8);
+            
+            const logLine = document.createElement('div');
+            logLine.className = 'log-line';
+            logLine.innerHTML = `
+                <span class="log-time">[${time}]</span>
+                <span class="log-message ${type}"> ${message}</span>
+            `;
+            
+            logContainer.appendChild(logLine);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // 限制日志数量
+            while (logContainer.children.length > 50) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+        }
+        
+        // ========== 配置持久化 ==========
+        function saveConfig() {
+            const cfg = {
+                model: modelSelect.value,
+                conf: confSlider.value,
+                iou: iouSlider.value,
+                freq: freqSlider.value,
+                minW: minWSlider.value,
+                minH: minHSlider.value,
+                maxW: maxWSlider.value,
+                maxH: maxHSlider.value,
+                tracking: trackingToggle.checked,
+                trackThresh: trackThreshSlider.value,
+                trailLen: trailLenSlider.value,
+                trailPrec: trailPrecSlider.value
+            };
+            localStorage.setItem('yolo_detect_config', JSON.stringify(cfg));
+        }
+        
+        function loadConfig() {
+            try {
+                const raw = localStorage.getItem('yolo_detect_config');
+                if (!raw) return;
+                const cfg = JSON.parse(raw);
+                if (cfg.model) { modelSelect.value = cfg.model; }
+                if (cfg.conf) { confSlider.value = cfg.conf; confValue.textContent = cfg.conf; }
+                if (cfg.iou) { iouSlider.value = cfg.iou; iouValue.textContent = cfg.iou; }
+                if (cfg.freq) { freqSlider.value = cfg.freq; freqValue.textContent = cfg.freq; }
+                if (cfg.minW) { minWSlider.value = cfg.minW; minWValue.textContent = cfg.minW; }
+                if (cfg.minH) { minHSlider.value = cfg.minH; minHValue.textContent = cfg.minH; }
+                if (cfg.maxW) { maxWSlider.value = cfg.maxW; maxWValue.textContent = cfg.maxW; }
+                if (cfg.maxH) { maxHSlider.value = cfg.maxH; maxHValue.textContent = cfg.maxH; }
+                if (cfg.tracking !== undefined) { trackingToggle.checked = cfg.tracking; trackingActive = cfg.tracking; trackingLabel.textContent = cfg.tracking ? '已开启' : '已关闭'; }
+                if (cfg.trackThresh) { trackThreshSlider.value = cfg.trackThresh; trackThreshValue.textContent = cfg.trackThresh; }
+                if (cfg.trailLen) { trailLenSlider.value = cfg.trailLen; trailLenValue.textContent = cfg.trailLen; }
+                if (cfg.trailPrec) { trailPrecSlider.value = cfg.trailPrec; trailPrecValue.textContent = cfg.trailPrec; }
+            } catch(e) { /* ignore corrupt config */ }
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

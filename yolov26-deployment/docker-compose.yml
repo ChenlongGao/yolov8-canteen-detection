@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  yolov26-api:
+    build: .
+    container_name: yolov26-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./runs:/app/runs
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CUDA_VISIBLE_DEVICES=0  # 如果有 GPU，指定使用的 GPU
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - yolov26-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: yolov26-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - yolov26-api
+    restart: unless-stopped
+    networks:
+      - yolov26-network
+
+networks:
+  yolov26-network:
+    driver: bridge
