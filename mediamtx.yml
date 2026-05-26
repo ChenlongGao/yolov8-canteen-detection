@@ -14,7 +14,7 @@ logDestinations: [stdout]
 logFile: mediamtx.log
 
 # Timeout of read operations.
-readTimeout: 10s
+readTimeout: 60s
 # Timeout of write operations.
 writeTimeout: 10s
 # Size of the queue of outgoing packets.
@@ -300,12 +300,12 @@ hlsAllowOrigin: '*'
 hlsTrustedProxies: []
 # By default, HLS is generated only when requested by a user.
 # This option allows to generate it always, avoiding the delay between request and generation.
-hlsAlwaysRemux: no
+hlsAlwaysRemux: yes
 # Variant of the HLS protocol to use. Available options are:
 # * mpegts - uses MPEG-TS segments, for maximum compatibility.
 # * fmp4 - uses fragmented MP4 segments, more efficient.
 # * lowLatency - uses Low-Latency HLS.
-hlsVariant: lowLatency
+hlsVariant: mpegts
 # Number of HLS segments to keep on the server.
 # Segments allow to seek through the stream.
 # Their number doesn't influence latency.

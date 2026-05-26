@@ -13,6 +13,22 @@ torch.load = _patched_load
 
 from ultralytics import YOLO
 import shutil
+
+# MediaPipe 算法服务
+from mediapipe_service import detect_faces, detect_hands, detect_pose_mp, detect_face_mesh
+
+# InsightFace 年龄性别
+import insightface
+import numpy as np
+import cv2
+_face_app = None
+
+def get_face_app():
+    global _face_app
+    if _face_app is None:
+        _face_app = insightface.app.FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider'])
+        _face_app.prepare(ctx_id=0, det_size=(320, 320))
+    return _face_app
 import tempfile
 import os
 from pathlib import Path
@@ -75,6 +91,7 @@ async def list_models():
         {"name": "yolov8x.pt", "task": "检测", "description": "XLarge 检测模型"},
         {"name": "yolov8n-seg.pt", "task": "分割", "description": "Nano 分割模型"},
         {"name": "yolov8n-pose.pt", "task": "姿态", "description": "Nano 姿态估计模型"},
+        {"name": "yolov8m-smoke.pt", "task": "吸烟检测", "description": "Medium 吸烟检测模型"},
         {"name": "yolov8n-obb.pt", "task": "旋转检测", "description": "Nano 旋转目标检测模型"},
         {"name": "yolov8n-cls.pt", "task": "分类", "description": "Nano 图像分类模型"},
     ]
@@ -205,6 +222,42 @@ async def track(
         os.unlink(tmp_path)
 
 
+@app.post("/age-gender")
+async def age_gender(
+    file: UploadFile = File(...),
+):
+    """
+    年龄性别检测接口
+    接收人脸/人体图片，返回年龄和性别估计
+    """
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = tmp.name
+    
+    try:
+        img = cv2.imread(tmp_path)
+        if img is None:
+            return {"success": False, "error": "无法读取图片"}
+        
+        app = get_face_app()
+        faces = app.get(img)
+        
+        if not faces:
+            return {"success": True, "age": None, "gender": None, "note": "未检测到人脸"}
+        
+        # 取置信度最高的人脸
+        face = max(faces, key=lambda f: f.det_score if hasattr(f, 'det_score') else 0)
+        age = int(face.age) if hasattr(face, 'age') else None
+        gender = '男' if face.gender == 1 else ('女' if face.gender == 0 else None)
+        
+        return {"success": True, "age": age, "gender": gender}
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    finally:
+        os.unlink(tmp_path)
+
+
 def _extract_detections(result, model):
     """提取检测结果"""
     detections = []
@@ -287,6 +340,42 @@ async def export(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"导出失败: {str(e)}")
+
+# ========================
+# MediaPipe 算法端点
+# ========================
+
+@app.post("/mp/face")
+async def mp_face(file: UploadFile = File(...), conf: float = 0.5):
+    """MediaPipe 人脸检测 (降级: OpenCV Haar)"""
+    image = cv2.imdecode(np.frombuffer(await file.read(), np.uint8), cv2.IMREAD_COLOR)
+    faces = detect_faces(image, min_confidence=conf)
+    return {"success": True, "algorithm": "mediapipe_face", "detections": faces, "count": len(faces)}
+
+@app.post("/mp/hands")
+async def mp_hands(file: UploadFile = File(...), conf: float = 0.5, max_hands: int = 2):
+    """MediaPipe 手部关键点 (21点/手)"""
+    image = cv2.imdecode(np.frombuffer(await file.read(), np.uint8), cv2.IMREAD_COLOR)
+    hands = detect_hands(image, min_confidence=conf, max_hands=max_hands)
+    return {"success": True, "algorithm": "mediapipe_hands", "detections": hands, "count": len(hands)}
+
+@app.post("/mp/pose-landmarks")
+async def mp_pose_landmarks(file: UploadFile = File(...), conf: float = 0.5):
+    """MediaPipe 姿态关键点 (33点) - 比 YOLO-Pose 的 17 点更精细"""
+    image = cv2.imdecode(np.frombuffer(await file.read(), np.uint8), cv2.IMREAD_COLOR)
+    pose = detect_pose_mp(image, min_confidence=conf)
+    if pose is None:
+        return {"success": True, "algorithm": "mediapipe_pose", "detections": [], "count": 0, "note": "模型未加载"}
+    return {"success": True, "algorithm": "mediapipe_pose", "detections": pose, "count": len(pose)}
+
+@app.post("/mp/face-mesh")
+async def mp_face_mesh(file: UploadFile = File(...)):
+    """MediaPipe 人脸网格 (478点) + 52种表情 blendshapes"""
+    image = cv2.imdecode(np.frombuffer(await file.read(), np.uint8), cv2.IMREAD_COLOR)
+    faces = detect_face_mesh(image)
+    if faces is None:
+        return {"success": True, "algorithm": "mediapipe_face_mesh", "detections": [], "count": 0, "note": "模型未加载"}
+    return {"success": True, "algorithm": "mediapipe_face_mesh", "detections": faces, "count": len(faces)}
 
 # 静态文件服务 (用于前端)
 frontend_path = Path("../frontend")

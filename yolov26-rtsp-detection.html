@@ -43,37 +43,15 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: 
-                linear-gradient(rgba(0, 245, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 245, 255, 0.03) 1px, transparent 1px);
+            background-image: none;
             background-size: 50px 50px;
             pointer-events: none;
             z-index: 0;
         }
         
-        /* 扫描线效果 */
+        /* 移除扫描线效果 */
         body::after {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: repeating-linear-gradient(
-                0deg,
-                rgba(0, 0, 0, 0.15) 0px,
-                rgba(0, 0, 0, 0.15) 1px,
-                transparent 1px,
-                transparent 2px
-            );
-            pointer-events: none;
-            z-index: 1;
-            animation: scanlines 8s linear infinite;
-        }
-        
-        @keyframes scanlines {
-            0% { transform: translateY(0); }
-            100% { transform: translateY(4px); }
+            display: none;
         }
         
         .container {
@@ -105,10 +83,7 @@
             font-size: 2.5rem;
             font-weight: 700;
             letter-spacing: -0.02em;
-            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-lime));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--accent-cyan);
         }
         
         .subtitle {
@@ -262,6 +237,89 @@
             font-size: 0.7rem;
             color: var(--text-secondary);
         }
+        
+        /* 算法状态 */
+        .algo-ok .panel-header { border-left: 3px solid var(--accent-lime); }
+        .algo-avail .panel-header { border-left: 3px solid var(--accent-cyan); }
+        .algo-ext .panel-header { border-left: 3px solid #ff8800; }
+        .algo-status {
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        .algo-ok .algo-status { color: var(--accent-lime); }
+        .algo-avail .algo-status { color: var(--accent-cyan); }
+        .algo-ext .algo-status { color: #ff8800; }
+        .algo-ext a { color: var(--accent-cyan); text-decoration: underline; }
+        .algo-ext a:hover { color: #ff8800; }
+        .algo-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.3rem;
+        }
+        .algo-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        .algo-switch input { opacity: 0; width: 0; height: 0; }
+        .algo-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 24px;
+            transition: 0.2s;
+        }
+        .algo-slider:before {
+            content: '';
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background: var(--text-secondary);
+            border-radius: 50%;
+            transition: 0.2s;
+        }
+        .algo-switch input:checked + .algo-slider {
+            background: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+        }
+        .algo-switch input:checked + .algo-slider:before {
+            background: #0a0a0f;
+            transform: translateX(20px);
+        }
+        
+        /* 接待明细表 */
+        .reception-table-wrap { overflow-x: auto; max-height: 60vh; overflow-y: auto; }
+        .reception-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+        .reception-table th {
+            background: var(--bg-tertiary);
+            color: var(--accent-cyan);
+            padding: 0.4rem 0.5rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: 0.7rem;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .reception-table td {
+            padding: 0.3rem 0.5rem;
+            border-bottom: 1px solid rgba(0,245,255,0.05);
+        }
+        .reception-table tr:hover td { background: rgba(0,245,255,0.03); }
+        .reception-active { color: var(--accent-lime); }
+        .reception-ended { color: var(--text-secondary); }
         
         /* 视频区域 */
         .video-section {
@@ -558,7 +616,7 @@
         .btn-primary {
             width: 100%;
             padding: 0.875rem;
-            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-lime));
+            background: var(--accent-cyan);
             border: none;
             border-radius: 0.375rem;
             color: var(--bg-primary);
@@ -696,8 +754,9 @@
         
         <!-- Tab 导航 -->
         <div class="tab-bar">
-            <button class="tab-btn active" data-tab="detect">📹 实时检测</button>
-            <button class="tab-btn" data-tab="config">⚙️ YOLO配置</button>
+            <button class="tab-btn active" data-tab="detect">实时检测</button>
+            <button class="tab-btn" data-tab="config">YOLO配置</button>
+            <button class="tab-btn" data-tab="algo">算法配置</button>
         </div>
         
         <!-- Tab 1: 实时检测 -->
@@ -706,17 +765,17 @@
                 <!-- 视频区域 -->
                 <section class="video-section">
                     <div class="stream-recovery-bar" id="recoveryBar" style="display:none;">
-                        <span style="color:var(--accent-red);">⚠️ 视频流已断开</span>
-                        <span class="control-hint" id="recoveryStatus" style="margin:0;">尝试自动重连中...</span>
-                        <div style="display:flex;gap:8px;margin-left:auto;">
-                            <label style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--text-secondary);">
+                        <span style="color:var(--accent-red);font-weight:600;white-space:nowrap;">| 视频流已断开</span>
+                        <span id="recoveryStatus" style="color:var(--text-secondary);font-size:0.75rem;white-space:nowrap;">自动重连中...</span>
+                        <div style="margin-left:auto;display:flex;align-items:center;gap:10px;white-space:nowrap;">
+                            <label style="display:flex;align-items:center;gap:5px;font-size:0.75rem;color:var(--text-secondary);cursor:pointer;">
                                 <input type="checkbox" id="autoRecoveryToggle" checked> 自动恢复
                             </label>
-                            <button class="btn-primary btn-sm" id="manualRecoverBtn">🔄 手动恢复</button>
+                            <button class="btn-primary btn-sm" id="manualRecoverBtn">恢复</button>
                         </div>
                     </div>
                     <div class="video-container">
-                        <div class="roi-indicator" id="roiIndicator">🎯 在视频上拖拽框选检测区域 (ESC取消)</div>
+                        <div class="roi-indicator" id="roiIndicator">在视频上拖拽框选检测区域 (ESC取消)</div>
                         <video id="videoElement" autoplay muted></video>
                         <canvas id="overlayCanvas" class="video-overlay"></canvas>
                     </div>
@@ -740,9 +799,14 @@
                         <span class="f-badge" id="trackCount">追踪:0</span>
                     </div>
                     
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <button class="btn-secondary btn-sm" id="downloadFrameBtn" disabled>📸 下载当前帧</button>
-                        <span class="control-hint" id="frameCacheHint" style="margin:0;">开启「截帧保存」后缓存帧</span>
+                    <div style="display:flex;gap:10px;margin:12px 0;">
+                        <button class="btn-primary" id="toggleDetectBtn" style="flex:1;">开始检测</button>
+                        <button class="btn-secondary" id="resetBtn" style="flex:1;">重置统计</button>
+                    </div>
+
+                    <div style="margin:8px 0;">
+                        <button class="btn-secondary btn-sm" id="downloadFrameBtn" disabled>下载当前帧</button>
+                        <span class="control-hint" id="frameCacheHint" style="display:block;margin:4px 0 0;">开启「截帧保存」后缓存帧</span>
                     </div>
                     
                     <!-- 检测日志滚动区 -->
@@ -773,13 +837,17 @@
             <div class="config-grid">
                 <!-- 模型配置 -->
                 <div class="panel">
-                    <div class="panel-header">🤖 模型配置</div>
+                    <div class="panel-header">模型配置</div>
                     <div class="panel-body">
                         <div class="control-group">
                             <label class="control-label">模型选择</label>
                             <select class="control-select" id="modelSelect">
-                                <option value="yolov8n.pt">YOLOv8-Nano (检测)</option>
+                                <option value="yolov8n.pt">YOLOv8-Nano (6MB)</option>
+                                <option value="yolov8s.pt">YOLOv8-Small (22MB)</option>
+                                <option value="yolov8m.pt">YOLOv8-Medium (50MB)</option>
+                                <option value="yolov8l.pt">YOLOv8-Large (84MB)</option>
                                 <option value="yolov8n-pose.pt">YOLOv8-Pose (姿态)</option>
+                                <option value="yolov8m-smoke.pt">YOLOv8-Smoke (吸烟)</option>
                                 <option value="dual">检测 + 姿态 (双模型)</option>
                             </select>
                         </div>
@@ -795,7 +863,7 @@
                 
                 <!-- 检测参数 -->
                 <div class="panel">
-                    <div class="panel-header">📐 检测参数</div>
+                    <div class="panel-header">检测参数</div>
                     <div class="panel-body">
                         <div class="control-group">
                             <label class="control-label">置信度阈值 <span class="slider-value" id="confValue">0.25</span></label>
@@ -809,24 +877,18 @@
                             <label class="control-label">检测频次 <span class="slider-value" id="freqValue">500</span>ms</label>
                             <input type="range" class="control-slider" id="freqSlider" min="200" max="2000" step="100" value="500">
                         </div>
-                        <div class="control-group">
-                            <button class="btn-primary" id="toggleDetectBtn" style="width:100%;">停止检测</button>
-                        </div>
-                        <div class="control-group">
-                            <button class="btn-secondary" id="resetBtn" style="width:100%;">重置统计</button>
-                        </div>
                     </div>
                 </div>
                 
                 <!-- ROI过滤 -->
                 <div class="panel">
-                    <div class="panel-header">🎯 ROI 过滤</div>
+                    <div class="panel-header">ROI 过滤</div>
                     <div class="panel-body">
                         <div class="control-group">
                             <label class="control-label">检测区域</label>
                             <div style="display:flex;gap:8px;">
                                 <button class="btn-secondary btn-sm" id="roiBtn">框选区域</button>
-                                <button class="btn-secondary btn-sm" id="roiClearBtn" style="display:none;">✕ 清除</button>
+                                <button class="btn-secondary btn-sm" id="roiClearBtn" style="display:none;">清除</button>
                             </div>
                             <span class="control-hint" id="roiHint">在检测页视频上拖拽框选</span>
                         </div>
@@ -835,15 +897,15 @@
                 
                 <!-- 尺寸过滤 -->
                 <div class="panel">
-                    <div class="panel-header">📏 尺寸过滤</div>
+                    <div class="panel-header">尺寸过滤</div>
                     <div class="panel-body">
                         <div class="control-group">
                             <label class="control-label">最小宽 <span class="slider-value" id="minWValue">60</span>px</label>
-                            <input type="range" class="control-slider" id="minWSlider" min="10" max="200" step="10" value="60">
+                            <input type="range" class="control-slider" id="minWSlider" min="1" max="200" step="1" value="10">
                         </div>
                         <div class="control-group">
-                            <label class="control-label">最小高 <span class="slider-value" id="minHValue">80</span>px</label>
-                            <input type="range" class="control-slider" id="minHSlider" min="10" max="200" step="10" value="80">
+                            <label class="control-label">最小高 <span class="slider-value" id="minHValue">10</span>px</label>
+                            <input type="range" class="control-slider" id="minHSlider" min="1" max="200" step="1" value="10">
                         </div>
                         <div class="control-group">
                             <label class="control-label">最大宽 <span class="slider-value" id="maxWValue">220</span>px</label>
@@ -858,7 +920,7 @@
                 
                 <!-- 追踪配置 -->
                 <div class="panel">
-                    <div class="panel-header">🔴 追踪配置</div>
+                    <div class="panel-header">追踪配置</div>
                     <div class="panel-body">
                         <div class="control-group">
                             <label class="control-label">目标追踪</label>
@@ -879,21 +941,220 @@
                             <label class="control-label">轨迹精度 <span class="slider-value" id="trailPrecValue">10</span>px</label>
                             <input type="range" class="control-slider" id="trailPrecSlider" min="1" max="50" step="1" value="10">
                         </div>
+                        <div class="control-group">
+                            <label class="control-label">人际连线</label>
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <input type="checkbox" id="connectionToggle" checked style="accent-color:#ff8800;width:18px;height:18px;">
+                                <span style="color:#ff8800;font-size:0.85rem;" id="connectionLabel">已开启</span>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">近距离阈值 <span class="slider-value" id="nearDistValue">150</span>px</label>
+                            <input type="range" class="control-slider" id="nearDistSlider" min="50" max="500" step="10" value="150">
+                        </div>
                     </div>
                 </div>
                 
                 <!-- 画线圈选 -->
                 <div class="panel">
-                    <div class="panel-header">🟣 画线圈选</div>
+                    <div class="panel-header">画线圈选</div>
                     <div class="panel-body">
                         <div class="control-group">
                             <label class="control-label">多边形区域</label>
                             <div style="display:flex;gap:8px;">
-                                <button class="btn-secondary btn-sm" id="lineDrawBtn">✏️ 画线圈选</button>
-                                <button class="btn-secondary btn-sm" id="lineClearBtn" style="display:none;">✕ 清除</button>
+                                <button class="btn-secondary btn-sm" id="lineDrawBtn">画线圈选</button>
+                                <button class="btn-secondary btn-sm" id="lineClearBtn" style="display:none;">清除</button>
                             </div>
                             <span class="control-hint" id="lineHint">在检测页视频上点击定义多边形</span>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tab 3: 算法配置 -->
+        <div class="tab-content" id="tab-algo">
+            <div class="config-grid">
+                <!-- 人体检测 -->
+                <div class="panel algo-ok" id="algoPanel-person">
+                    <div class="panel-header">人体检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-person"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-person" checked data-class="person">
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">YOLOv8n (COCO person)</p>
+                    </div>
+                </div>
+                <!-- 姿态检测 -->
+                <div class="panel algo-ok" id="algoPanel-pose">
+                    <div class="panel-header">姿态检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-pose"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-pose" checked data-class="pose">
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">YOLOv8n-pose 17关键点</p>
+                    </div>
+                </div>
+                <!-- 手机检测 -->
+                <div class="panel algo-avail" id="algoPanel-cell_phone">
+                    <div class="panel-header">手机检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-cell_phone"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-cell_phone" data-class="cell_phone">
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">YOLOv8n (COCO 67)</p>
+                    </div>
+                </div>
+                <!-- 吸烟检测 -->
+                <div class="panel algo-ok" id="algoPanel-smoke">
+                    <div class="panel-header">吸烟检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-smoke"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-smoke" data-class="smoke">
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">需切换模型: YOLOv8-Smoke</p>
+                    </div>
+                </div>
+                <!-- 餐桌检测 -->
+                <div class="panel algo-avail" id="algoPanel-dining_table">
+                    <div class="panel-header">餐桌检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-dining_table"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-dining_table" data-class="dining_table">
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">YOLOv8n (COCO 67)</p>
+                    </div>
+                </div>
+                <!-- 杯子检测 -->
+                <div class="panel algo-avail" id="algoPanel-cup">
+                    <div class="panel-header">杯子检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-cup"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-cup" data-class="cup">
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">YOLOv8n (COCO 47)</p>
+                    </div>
+                </div>
+                <!-- 年龄检测 -->
+                <div class="panel algo-ext" id="algoPanel-age">
+                    <div class="panel-header">年龄检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-age"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-age" data-class="age">
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">需外部模型 (MiVOLO/InsightFace)</p>
+                    </div>
+                </div>
+                <!-- 性别检测 -->
+                <div class="panel algo-ext" id="algoPanel-gender">
+                    <div class="panel-header">性别检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-gender"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-gender" data-class="gender">
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">需外部模型 (ReID/Face)</p>
+                    </div>
+                </div>
+                <!-- 衣着检测 -->
+                <div class="panel algo-ok" id="algoPanel-clothing">
+                    <div class="panel-header">衣着检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-clothing"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-clothing" data-class="clothing">
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">颜色采样分析(红/黑/白)</p>
+                    </div>
+                </div>
+                <!-- 快速检测 -->
+                <div class="panel algo-ok" id="algoPanel-fast">
+                    <div class="panel-header">快速检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-fast"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-fast" data-class="fast">
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">移动速度 > 2m/s 标记</p>
+                    </div>
+                </div>
+                <!-- 店员检测 -->
+                <div class="panel algo-ok" id="algoPanel-staff">
+                    <div class="panel-header">店员检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-staff"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-staff" data-class="staff">
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">红衣+黑裤+帽 (颜色匹配)</p>
+                    </div>
+                </div>
+                <!-- 快递检测 -->
+                <div class="panel algo-ok" id="algoPanel-courier">
+                    <div class="panel-header">快递检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-courier"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-courier" data-class="courier">
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">头盔特征 (需头部区域检测)</p>
+                    </div>
+                </div>
+                <!-- 接待检测 -->
+                <div class="panel algo-ok" id="algoPanel-reception">
+                    <div class="panel-header">接待检测</div>
+                    <div class="panel-body">
+                        <div class="algo-row">
+                            <span class="algo-status" id="algoStatus-reception"></span>
+                            <label class="algo-switch">
+                                <input type="checkbox" id="algo-reception" data-class="reception" checked>
+                                <span class="algo-slider"></span>
+                            </label>
+                        </div>
+                        <p class="control-hint">店员-顾客接近+时长+静止</p>
                     </div>
                 </div>
             </div>
@@ -971,9 +1232,13 @@
         const recoveryStatus = document.getElementById('recoveryStatus');
         const autoRecoveryToggle = document.getElementById('autoRecoveryToggle');
         const manualRecoverBtn = document.getElementById('manualRecoverBtn');
+        const connectionToggle = document.getElementById('connectionToggle');
+        const connectionLabel = document.getElementById('connectionLabel');
+        const nearDistSlider = document.getElementById('nearDistSlider');
+        const nearDistValue = document.getElementById('nearDistValue');
         
         // 状态变量
-        let isDetecting = true;
+        let isDetecting = false;
         let detectionCount = 0;
         let frameCount = 0;
         let lastTime = performance.now();
@@ -993,6 +1258,19 @@
         let nextTrackId = 1;
         let trackIdMap = new Map();
         let trackingActive = true;
+        
+        // 人际连线状态
+        let personIdMap = new Map();  // track_id → "P-XXXX"
+        let connectionActive = true;
+        
+        // 年龄性别缓存
+        let ageGenderCache = new Map(); // track_id → {age, gender}
+        
+        // 接待检测状态
+        let receptionRecords = [];        // [{time, staffId, customerId, distance, duration, active}]
+        let interactionPairs = new Map(); // "staffId-custId" → {startTime, lastSeen, durations}
+        let receptionActive = true;
+        let clothingCache = new Map();    // track_id → {topColor, botColor}
         
         // 画线相关变量
         let linePoints = [];            // [{x, y}] 归一化坐标
@@ -1030,19 +1308,18 @@
             recoveryAttempts++;
             showRecoveryBar(`第${recoveryAttempts}/${MAX_RECOVERY}次重连...`);
             addLog(`自动恢复: 第${recoveryAttempts}次重连`, 'info');
-            
+
             // 销毁旧 HLS 实例
             if (hls) {
                 hls.destroy();
                 hls = null;
             }
-            
-            // 重新创建
-            if (Hls.isSupported()) {
-                hls = new Hls({ debug: false, enableWorker: true, lowLatencyMode: true });
-                hls.loadSource('http://localhost:8888/mystream/index.m3u8');
+
+            if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                hls = new Hls({ debug: false, enableWorker: false });
+                hls.loadSource('http://localhost:4000/hls/mystream/index.m3u8');
                 hls.attachMedia(videoElement);
-                
+
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
                     hideRecoveryBar();
                     streamStatus.className = 'status-dot active';
@@ -1050,7 +1327,7 @@
                     addLog('HLS 流恢复成功', 'success');
                     videoElement.play();
                 });
-                
+
                 hls.on(Hls.Events.ERROR, (event, data) => {
                     addLog(`HLS 错误: ${data.type}`, 'error');
                     streamStatus.className = 'status-dot inactive';
@@ -1071,22 +1348,17 @@
         
         // 初始化
         function init() {
+            try {
             // 加载已保存的配置
             loadConfig();
             
-            addLog('正在初始化 HLS 播放器...', 'info');
+            addLog('正在加载视频文件...', 'info');
             
-            // 初始化 HLS 播放器
-            if (Hls.isSupported()) {
-                hls = new Hls({
-                    debug: false,
-                    enableWorker: true,
-                    lowLatencyMode: true
-                });
-                
-                hls.loadSource('http://localhost:8888/mystream/index.m3u8');
+            // 初始化 HLS 播放器（容错：HLS.js 未加载时不影响其他功能）
+            if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                hls = new Hls({ debug: false, enableWorker: false });
+                hls.loadSource('http://localhost:4000/hls/mystream/index.m3u8');
                 hls.attachMedia(videoElement);
-                
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
                     addLog('HLS 流已连接', 'success');
                     hideRecoveryBar();
@@ -1094,7 +1366,6 @@
                     streamStatusText.textContent = '流已连接';
                     videoElement.play();
                 });
-                
                 hls.on(Hls.Events.ERROR, (event, data) => {
                     addLog(`HLS 错误: ${data.type}`, 'error');
                     streamStatus.className = 'status-dot inactive';
@@ -1105,8 +1376,7 @@
                     }
                 });
             } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-                // Safari 原生支持 HLS
-                videoElement.src = 'http://localhost:8888/mystream/index.m3u8';
+                videoElement.src = 'http://localhost:4000/hls/mystream/index.m3u8';
                 videoElement.addEventListener('loadedmetadata', () => {
                     addLog('HLS 流已连接 (Safari)', 'success');
                     videoElement.play();
@@ -1168,6 +1438,24 @@
             trailLenSlider.addEventListener('input', () => { trailLenValue.textContent = trailLenSlider.value; saveConfig(); });
             trailPrecSlider.addEventListener('input', () => { trailPrecValue.textContent = trailPrecSlider.value; saveConfig(); });
             
+            connectionToggle.addEventListener('change', () => {
+                connectionActive = connectionToggle.checked;
+                connectionLabel.textContent = connectionActive ? '已开启' : '已关闭';
+                if (!connectionActive) personIdMap.clear();
+                saveConfig();
+            });
+            nearDistSlider.addEventListener('input', () => { nearDistValue.textContent = nearDistSlider.value; saveConfig(); });
+            
+            // 接待检测事件
+            document.getElementById('algo-reception').addEventListener('change', () => { receptionActive = document.getElementById('algo-reception').checked; saveAlgoConfig(); });
+            
+            // 算法开关事件
+            document.querySelectorAll('[id^="algo-"]').forEach(cb => {
+                cb.addEventListener('change', () => updateAlgoStatus(cb));
+                cb.addEventListener('change', saveAlgoConfig);
+            });
+            document.querySelectorAll('[id^="algo-"]').forEach(cb => updateAlgoStatus(cb));
+            
             // 画线按钮
             lineDrawBtn.addEventListener('click', toggleLineMode);
             lineClearBtn.addEventListener('click', clearLines);
@@ -1208,16 +1496,20 @@
             });
             
             addLog('系统初始化完成', 'success');
+            } catch(e) {
+                addLog('初始化失败: ' + e.message, 'error');
+                console.error('init error:', e);
+            }
         }
         
-        // 开始检测循环
+        // 开始检测循环（顺序执行，避免并发）
         function startDetectionLoop() {
             if (!isDetecting) return;
             
             const interval = parseInt(freqSlider.value) || 500;
-            setTimeout(() => {
-                detectFrame();
-                startDetectionLoop();
+            setTimeout(async () => {
+                await detectFrame();      // 等待本次检测完成
+                startDetectionLoop();    // 再启动下一轮
             }, interval);
         }
         
@@ -1232,6 +1524,7 @@
                 canvas.height = videoElement.videoHeight;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(videoElement, 0, 0);
+                window._videoCtx = ctx;  // 供衣着检测使用
                 
                 // 转换为 blob（共用同一帧）
                 const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
@@ -1252,7 +1545,7 @@
                         sendToAPI(blob, 'yolov8n-pose.pt')
                     ]);
                     
-                    // 合并结果 → 只保留人 → 尺寸过滤 → 画线过滤 → ROI 过滤
+                    // 合并结果 → 类别过滤 → 尺寸过滤 → 画线过滤 → ROI 过滤
                     let merged = (detResult.detections || []).concat(poseResult.detections || []);
                     merged = filterByClass(merged);
                     merged = filterBySize(merged);
@@ -1261,7 +1554,7 @@
                     merged = matchTracks(merged);
                     updateDetections({ detections: merged, count: merged.length });
                 } else {
-                    // 单模型模式 → 只保留人 → 尺寸过滤 → 画线过滤 → ROI 过滤
+                    // 单模型模式 → 类别过滤 → 尺寸过滤 → 画线过滤 → ROI 过滤
                     let data = await sendToAPI(blob, selectedModel);
                     let dets = data.detections || [];
                     dets = filterByClass(dets);
@@ -1445,18 +1738,86 @@
             }
         }
         
+        // ========== 人际连线 ==========
+        function genPersonId() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let id = 'P-';
+            for (let i = 0; i < 3; i++) id += chars[Math.floor(Math.random() * chars.length)];
+            return id;
+        }
+        
+        function drawPersonConnections(ctx, detections) {
+            if (!connectionActive || detections.length < 2) return;
+            
+            const nearDist = parseInt(nearDistSlider.value) || 150;
+            const persons = detections.filter(d => d.class_name === 'person');
+            if (persons.length < 2) return;
+            
+            // 确保每人有稳定的 Person ID
+            for (const p of persons) {
+                const tid = p.track_id;
+                if (tid !== undefined && !personIdMap.has(tid)) {
+                    personIdMap.set(tid, genPersonId());
+                }
+            }
+            
+            // 计算中心点
+            const pts = persons.map(p => ({
+                cx: (p.bbox[0] + p.bbox[2]) / 2,
+                cy: (p.bbox[1] + p.bbox[3]) / 2,
+                tid: p.track_id,
+                pid: p.track_id !== undefined ? personIdMap.get(p.track_id) : 'P-???'
+            }));
+            
+            // 两两连线
+            for (let i = 0; i < pts.length; i++) {
+                for (let j = i + 1; j < pts.length; j++) {
+                    const dx = pts[i].cx - pts[j].cx;
+                    const dy = pts[i].cy - pts[j].cy;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const isNear = dist <= nearDist;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(pts[i].cx, pts[i].cy);
+                    ctx.lineTo(pts[j].cx, pts[j].cy);
+                    
+                    if (isNear) {
+                        ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
+                        ctx.lineWidth = 4;
+                        ctx.setLineDash([]);
+                    } else {
+                        ctx.strokeStyle = 'rgba(0, 255, 0, 0.9)';
+                        ctx.lineWidth = 4;
+                        ctx.setLineDash([12, 8]);
+                    }
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+            
+            // 绘制 Person ID 标签
+            ctx.font = 'bold 11px JetBrains Mono';
+            for (const p of pts) {
+                const tw = ctx.measureText(p.pid).width;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+                ctx.fillRect(p.cx - tw/2 - 4, p.cy - 22, tw + 8, 18);
+                ctx.fillStyle = '#ff8800';
+                ctx.fillText(p.pid, p.cx - tw/2, p.cy - 8);
+            }
+        }
+        
         // ========== 画线圈选 ==========
         
         function toggleLineMode() {
             isDrawingLine = !isDrawingLine;
             if (isDrawingLine) {
                 overlayCanvas.classList.add('roi-active');
-                lineDrawBtn.textContent = '🔒 完成画线';
+                lineDrawBtn.textContent = '完成画线';
                 lineHint.textContent = '在视频上点击添加顶点，拖拽调整';
                 addLog('画线模式已激活 - 点击视频添加顶点', 'info');
             } else {
                 overlayCanvas.classList.remove('roi-active');
-                lineDrawBtn.textContent = '✏️ 画线圈选';
+                lineDrawBtn.textContent = '画线圈选';
                 if (linePoints.length >= 3) {
                     lineClearBtn.style.display = 'inline-block';
                     lineHint.textContent = `已定义 ${linePoints.length} 边形区域`;
@@ -1467,7 +1828,7 @@
         function clearLines() {
             linePoints = [];
             lineClearBtn.style.display = 'none';
-            lineDrawBtn.textContent = '✏️ 画线圈选';
+            lineDrawBtn.textContent = '画线圈选';
             lineHint.textContent = '点击按钮后在视频上点击定义多边形区域';
             lineFilteredTotal = 0;
             lineFilterCount.textContent = '画线过滤: 0';
@@ -1544,6 +1905,21 @@
             // 更新检测列表
             updateDetectionList(data.detections);
             
+            // 衣着检测
+            if (window._videoCtx) detectClothing(window._videoCtx, data.detections);
+            
+            // 接待检测
+            detectReception(data.detections.filter(d => d.class_name === 'person'), performance.now());
+            
+            // 快速检测: 标记移动速度
+            const fastMovers = detectFastMovement(data.detections.filter(d => d.class_name === 'person'));
+            data.detections.forEach(d => {
+                if (d.class_name === 'person') d.isFast = fastMovers.some(f => f.track_id === d.track_id);
+            });
+            
+            // 店员/快递检测: 已通过 getRole() 在渲染时标记
+            // (isStaff / isCourier 在 getRole 中判定)
+            
             // 更新覆盖层
             updateOverlay(data.detections);
         }
@@ -1559,18 +1935,53 @@
                 item.className = 'detection-item';
                 const modelTag = detection.model === 'yolov8n-pose.pt' ? '姿态' : '检测';
                 const tagColor = detection.model === 'yolov8n-pose.pt' ? '#00f5ff' : '#bfff00';
+                const pid = personIdMap.get(detection.track_id) || '';
+                const role = detection.class_name === 'person' ? getRole(detection) : '';
+                const cloth = detection.class_name === 'person' && detection.track_id ? clothingCache.get(detection.track_id) : null;
+                const ag = detection.class_name === 'person' && detection.track_id ? ageGenderCache.get(detection.track_id) : null;
+                const agInfo = ag ? (ag.gender || '?') + ' ' + (ag.age || '?') + '岁' : '';
+                
+                // 异步请求年龄性别（仅新人）
+                if (detection.class_name === 'person' && detection.track_id && !ageGenderCache.has(detection.track_id)) {
+                    requestAgeGender(detection);
+                }
+                
                 item.innerHTML = `
                     <div class="detection-class">
                         <span style="color:${tagColor};font-size:0.7rem;margin-right:4px;">[${modelTag}]</span>
-                        ${index + 1}. ${detection.class_name}
+                        ${pid ? '<span style="color:#ff8800;font-size:0.75rem;">' + pid + '</span> ' : ''}${detection.class_name}${role ? ' <span style="color:#888;font-size:0.65rem;">(' + role + ')</span>' : ''}
                     </div>
                     <div class="detection-info">
                         <span>置信度: ${(detection.confidence * 100).toFixed(1)}%</span>
                         <span>坐标: [${detection.bbox.map(b => b.toFixed(0)).join(', ')}]</span>
                     </div>
+                    ${agInfo ? '<div class="detection-meta" style="font-size:0.65rem;color:#ff8800;">' + agInfo + '</div>' : ''}
                 `;
                 detectionList.appendChild(item);
             });
+        }
+        
+        async function requestAgeGender(det) {
+            const canvas = document.createElement('canvas');
+            const vw = videoElement.videoWidth || 640;
+            const vh = videoElement.videoHeight || 480;
+            canvas.width = vw; canvas.height = vh;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(videoElement, 0, 0);
+            const [x1,y1,x2,y2] = det.bbox;
+            const cropCanvas = document.createElement('canvas');
+            const cw = x2-x1, ch = y2-y1;
+            cropCanvas.width = cw; cropCanvas.height = ch;
+            cropCanvas.getContext('2d').drawImage(canvas, x1, y1, cw, ch, 0, 0, cw, ch);
+            try {
+                const blob = await new Promise(r => cropCanvas.toBlob(r, 'image/jpeg', 0.8));
+                const fd = new FormData(); fd.append('file', blob, 'person.jpg');
+                const res = await fetch('http://localhost:8000/age-gender', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.success && data.age) {
+                    ageGenderCache.set(det.track_id, { age: data.age, gender: data.gender });
+                }
+            } catch(e) {}
         }
         
         // 更新覆盖层
@@ -1605,7 +2016,7 @@
                 // ROI 标签
                 ctx.fillStyle = '#ff6600';
                 ctx.font = '11px JetBrains Mono';
-                ctx.fillText('📐 检测区域', rx + 6, ry - 8 > 16 ? ry - 8 : ry + 16);
+                ctx.fillText('检测区域', rx + 6, ry - 8 > 16 ? ry - 8 : ry + 16);
             }
             
             detections.forEach(detection => {
@@ -1624,7 +2035,24 @@
                 
                 // 绘制标签
                 const modelTag = isPose ? '姿态' : '检测';
-                const label = `[${modelTag}] ${detection.class_name} ${(detection.confidence * 100).toFixed(1)}%`;
+                let label = `[${modelTag}] ${detection.class_name} ${(detection.confidence * 100).toFixed(1)}%`;
+                
+                // 人物增强标签: 角色 + 衣着 + 速度
+                if (detection.class_name === 'person') {
+                    const role = getRole(detection);
+                    const cloth = detection.track_id ? clothingCache.get(detection.track_id) : null;
+                    const extras = [];
+                    if (role && role !== '顾客') extras.push(role);
+                    if (cloth) {
+                        const colors = [];
+                        if (cloth.topColor) colors.push('上衣:' + cloth.topColor);
+                        if (cloth.botColor) colors.push('裤:' + cloth.botColor);
+                        if (colors.length) extras.push(colors.join(' '));
+                    }
+                    if (detection.isFast) extras.push('快速');
+                    if (extras.length) label += ' [' + extras.join(' | ') + ']';
+                }
+                
                 ctx.font = '16px JetBrains Mono';
                 const labelWidth = ctx.measureText(label).width;
                 
@@ -1637,6 +2065,9 @@
             
             // 绘制轨迹线
             drawTrajectories(ctx);
+            
+            // 绘制人际连线
+            drawPersonConnections(ctx, detections);
             
             // 绘制画线多边形
             if (linePoints.length >= 3) {
@@ -1698,6 +2129,7 @@
             lineFilteredTotal = 0;
             trackHistory = {};
             nextTrackId = 1;
+            personIdMap.clear();
             
             totalDetections.textContent = '0';
             fpsValue.textContent = '0';
@@ -1734,13 +2166,13 @@
             if (roiDrawing) {
                 overlayCanvas.classList.add('roi-active');
                 roiIndicator.classList.add('active');
-                roiBtn.textContent = '🔒 确认区域';
+                roiBtn.textContent = '确认区域';
                 roiHint.textContent = '拖拽框选就餐座位区域,按ESC取消';
                 addLog('ROI 绘制模式已激活', 'info');
             } else {
                 overlayCanvas.classList.remove('roi-active');
                 roiIndicator.classList.remove('active');
-                roiBtn.textContent = '🎯 框选区域';
+                roiBtn.textContent = '框选区域';
                 if (roi) {
                     roiHint.textContent = `已框选区域，点击按钮重新框选`;
                 }
@@ -1751,7 +2183,7 @@
         function clearRoi() {
             roi = null;
             roiClearBtn.style.display = 'none';
-            roiBtn.textContent = '🎯 框选区域';
+            roiBtn.textContent = '框选区域';
             roiHint.textContent = '点击按钮后在视频上拖拽框选就餐区域';
             roiDrawing = false;
             overlayCanvas.classList.remove('roi-active');
@@ -1820,7 +2252,7 @@
             roiDrawing = false;
             overlayCanvas.classList.remove('roi-active');
             roiIndicator.classList.remove('active');
-            roiBtn.textContent = '🎯 框选区域';
+            roiBtn.textContent = '框选区域';
             roiHint.textContent = `已框选检测区域 [${(x1*100).toFixed(0)}%,${(y1*100).toFixed(0)}% → ${(x2*100).toFixed(0)}%,${(y2*100).toFixed(0)}%]`;
             addLog(`ROI 已设置 (${(x2-x1)*rect.width|0}×${(y2-y1)*rect.height|0}px)`, 'success');
         }
@@ -1832,7 +2264,7 @@
                 isDrawingRoi = false;
                 overlayCanvas.classList.remove('roi-active');
                 roiIndicator.classList.remove('active');
-                roiBtn.textContent = '🎯 框选区域';
+                roiBtn.textContent = '框选区域';
                 roiHint.textContent = roi ? `已框选区域，点击按钮重新框选` : '点击按钮后在视频上拖拽框选就餐区域';
                 addLog('ROI 绘制已取消', 'info');
             }
@@ -1853,9 +2285,18 @@
             return filtered;
         }
         
-        // 只保留 person 类
+        // 按启用算法过滤（动态读取算法开关）
         function filterByClass(detections) {
-            return detections.filter(d => d.class_name === 'person');
+            const enabled = new Set();
+            document.querySelectorAll('[id^="algo-"]').forEach(cb => {
+                if (cb.checked) {
+                    const cls = cb.dataset.class;
+                    if (cls === 'pose') return;
+                    enabled.add(cls.replace(/_/g, ' '));
+                }
+            });
+            if (enabled.size === 0) return detections;
+            return detections.filter(d => enabled.has(d.class_name));
         }
         
         // 按检测框尺寸过滤（基于 1920x1080 参考分辨率缩放）
@@ -1918,7 +2359,9 @@
                 tracking: trackingToggle.checked,
                 trackThresh: trackThreshSlider.value,
                 trailLen: trailLenSlider.value,
-                trailPrec: trailPrecSlider.value
+                trailPrec: trailPrecSlider.value,
+                connection: connectionToggle.checked,
+                nearDist: nearDistSlider.value
             };
             localStorage.setItem('yolo_detect_config', JSON.stringify(cfg));
         }
@@ -1940,11 +2383,161 @@
                 if (cfg.trackThresh) { trackThreshSlider.value = cfg.trackThresh; trackThreshValue.textContent = cfg.trackThresh; }
                 if (cfg.trailLen) { trailLenSlider.value = cfg.trailLen; trailLenValue.textContent = cfg.trailLen; }
                 if (cfg.trailPrec) { trailPrecSlider.value = cfg.trailPrec; trailPrecValue.textContent = cfg.trailPrec; }
+                if (cfg.connection !== undefined) { connectionToggle.checked = cfg.connection; connectionActive = cfg.connection; connectionLabel.textContent = cfg.connection ? '已开启' : '已关闭'; }
+                if (cfg.nearDist) { nearDistSlider.value = cfg.nearDist; nearDistValue.textContent = cfg.nearDist; }
             } catch(e) { /* ignore corrupt config */ }
         }
         
+        // ========== 算法开关持久化 ==========
+        function saveAlgoConfig() {
+            const algo = {};
+            document.querySelectorAll('[id^="algo-"]').forEach(cb => {
+                algo[cb.id] = cb.checked;
+            });
+            localStorage.setItem('yolo_algo_config', JSON.stringify(algo));
+        }
+        
+        function loadAlgoConfig() {
+            try {
+                const raw = localStorage.getItem('yolo_algo_config');
+                if (!raw) return;
+                const algo = JSON.parse(raw);
+                for (const [id, checked] of Object.entries(algo)) {
+                    const cb = document.getElementById(id);
+                    if (cb) cb.checked = checked;
+                }
+            } catch(e) {}
+        }
+        
+        function updateAlgoStatus(cb) {
+            const cls = cb.dataset.class;
+            if (!cls) return;  // 无 data-class 跳过
+            const panel = document.getElementById('algoPanel-' + cls.replace(' ','_'));
+            const status = document.getElementById('algoStatus-' + cls.replace(' ','_'));
+            if (!status) return;
+            if (cb.checked) {
+                panel.className = 'panel algo-ok';
+                status.innerHTML = '已启用';
+            } else {
+                panel.className = 'panel algo-avail';
+                status.innerHTML = '已关闭';
+            }
+        }
+        
+        // ========== 接待检测系统 ==========
+        
+        function detectClothing(videoCtx, detections) {
+            const cb = document.getElementById('algo-clothing');
+            if (!cb || !cb.checked) return;
+            for (const d of detections) {
+                if (d.class_name !== 'person' || !d.track_id) continue;
+                const [x1, y1, x2, y2] = d.bbox;
+                if (x2 <= x1 || y2 <= y1) continue;
+                const topY = y1 + (y2 - y1) * 0.15;
+                const midY = y1 + (y2 - y1) * 0.4;
+                const botY = y1 + (y2 - y1) * 0.75;
+                try {
+                    const topData = videoCtx.getImageData(Math.max(x1, 0) + 2, Math.max(topY, 0) + 2, Math.min(x2 - x1 - 4, 20), Math.min(midY - topY - 4, 10)).data;
+                    const botData = videoCtx.getImageData(Math.max(x1, 0) + 2, Math.max(botY, 0) + 2, Math.min(x2 - x1 - 4, 20), Math.min(y2 - botY - 4, 10)).data;
+                    clothingCache.set(d.track_id, { topColor: avgColor(topData), botColor: avgColor(botData) });
+                } catch(e) {}
+            }
+        }
+        
+        function avgColor(data) {
+            let r = 0, g = 0, b = 0, n = 0;
+            for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; n++; }
+            if (!n) return 'unknown';
+            r /= n; g /= n; b /= n;
+            if (r > 140 && g < 80 && b < 80) return 'red';
+            if (r < 60 && g < 60 && b < 60) return 'black';
+            if (r < 50 && g < 50 && b < 50) return 'dark';
+            if (r > 200 && g > 200 && b > 200) return 'white';
+            if (r > 160 && g > 160 && b < 60) return 'yellow';
+            if (r < 60 && g > 80 && b < 60) return 'green';
+            if (r < 80 && g < 80 && b > 120) return 'blue';
+            return 'other';
+        }
+        
+        function isStaff(det) {
+            const ca = document.getElementById('algo-staff');
+            if (!ca || !ca.checked) return false;
+            if (!det.track_id) return false;
+            const c = clothingCache.get(det.track_id);
+            return c && c.topColor === 'red' && c.botColor === 'black';
+        }
+        
+        function isCourier(det) {
+            const ca = document.getElementById('algo-courier');
+            if (!ca || !ca.checked) return false;
+            if (!det.track_id) return false;
+            const c = clothingCache.get(det.track_id);
+            return c && (c.topColor === 'yellow' || c.topColor === 'blue') && c.botColor === 'dark';
+        }
+        
+        function getRole(det) {
+            if (isCourier(det)) return '快递';
+            if (isStaff(det)) return '店员';
+            return '顾客';
+        }
+        
+        function detectReception(persons, now) {
+            const ra = document.getElementById('algo-reception');
+            const sa = document.getElementById('algo-staff');
+            if (!ra || !ra.checked || !sa || !sa.checked) return;
+            const nearDist = 150, minDur = 3000;
+            const staffL = persons.filter(isStaff), custL = persons.filter(p => !isStaff(p));
+            for (const s of staffL) {
+                if (!s.track_id) continue;
+                const sx = (s.bbox[0] + s.bbox[2]) / 2, sy = (s.bbox[1] + s.bbox[3]) / 2;
+                for (const c of custL) {
+                    if (!c.track_id) continue;
+                    const cx = (c.bbox[0] + c.bbox[2]) / 2, cy = (c.bbox[1] + c.bbox[3]) / 2;
+                    const dist = Math.sqrt((sx - cx) ** 2 + (sy - cy) ** 2);
+                    const pk = s.track_id + '-' + c.track_id;
+                    if (dist < nearDist) {
+                        if (!interactionPairs.has(pk)) interactionPairs.set(pk, { startTime: now, lastSeen: now, sTid: s.track_id, cTid: c.track_id });
+                        else {
+                            const ip = interactionPairs.get(pk);
+                            ip.lastSeen = now;
+                            const dur = now - ip.startTime;
+                            const ex = receptionRecords.find(r => r.staffId === personIdMap.get(s.track_id) && r.customerId === personIdMap.get(c.track_id) && r.active);
+                            if (dur > minDur && !ex) {
+                                receptionRecords.push({ time: new Date().toLocaleTimeString(), staffId: personIdMap.get(s.track_id) || 'P-???', customerId: personIdMap.get(c.track_id) || 'P-???', distance: Math.round(dist), duration: Math.round(dur / 1000), still: '是', active: true });
+                                updateReceptionTable();
+                            }
+                        }
+                    }
+                }
+            }
+            for (const [k, ip] of interactionPairs) { if (now - ip.lastSeen > 5000) interactionPairs.delete(k); }
+        }
+        
+        function detectFastMovement(persons) {
+            const fa = document.getElementById('algo-fast');
+            if (!fa || !fa.checked) return [];
+            const thr = 20, res = [];
+            for (const p of persons) {
+                if (!p.track_id || !trackHistory[p.track_id] || trackHistory[p.track_id].length < 2) continue;
+                const h = trackHistory[p.track_id], l = h[h.length - 1], prev = h[h.length - 2];
+                const sp = Math.sqrt((l.cx - prev.cx) ** 2 + (l.cy - prev.cy) ** 2);
+                if (sp > thr) res.push({ ...p, speed: sp });
+            }
+            return res;
+        }
+        
+        function updateReceptionTable() {
+            // Tab 已移除，仅保留内存记录
+        }
+        window._endRec = function(i) { const idx = receptionRecords.length-1-i; if(idx>=0){receptionRecords[idx].active=false;} };
+        
+        function clearReceptionRecords() { receptionRecords=[]; interactionPairs.clear(); }
+        
         // 页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAlgoConfig();
+            init();
+        });
     </script>
 </body>
 </html>
