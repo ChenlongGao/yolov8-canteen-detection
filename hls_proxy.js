@@ -7,9 +7,9 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = 4000;
-const ROOT = '/Users/paocai/WorkBuddy/2026-05-19-task-13';
+const ROOT = process.env.PROXY_ROOT || __dirname;
 const HLS_TARGET = 'http://127.0.0.1:8888';
+const LISTEN_PORT = parseInt(process.env.PORT || '4000');
 
 function contentType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -79,8 +79,8 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`HLS Proxy (Node.js) on http://localhost:${PORT}`);
+server.listen(LISTEN_PORT, () => {
+  console.log(`HLS Proxy (Node.js) on http://localhost:${LISTEN_PORT}`);
   console.log(`  /hls/*  →  ${HLS_TARGET}/*`);
   console.log(`  /*      →  static files from ${ROOT}`);
 });

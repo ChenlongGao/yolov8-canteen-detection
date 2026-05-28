@@ -1317,7 +1317,7 @@
 
             if (typeof Hls !== 'undefined' && Hls.isSupported()) {
                 hls = new Hls({ debug: false, enableWorker: false });
-                hls.loadSource('http://localhost:4000/hls/mystream/index.m3u8');
+                hls.loadSource('/hls/mystream/index.m3u8');
                 hls.attachMedia(videoElement);
 
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -1357,7 +1357,7 @@
             // 初始化 HLS 播放器（容错：HLS.js 未加载时不影响其他功能）
             if (typeof Hls !== 'undefined' && Hls.isSupported()) {
                 hls = new Hls({ debug: false, enableWorker: false });
-                hls.loadSource('http://localhost:4000/hls/mystream/index.m3u8');
+                hls.loadSource('/hls/mystream/index.m3u8');
                 hls.attachMedia(videoElement);
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
                     addLog('HLS 流已连接', 'success');
@@ -1376,7 +1376,7 @@
                     }
                 });
             } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-                videoElement.src = 'http://localhost:4000/hls/mystream/index.m3u8';
+                videoElement.src = '/hls/mystream/index.m3u8';
                 videoElement.addEventListener('loadedmetadata', () => {
                     addLog('HLS 流已连接 (Safari)', 'success');
                     videoElement.play();
