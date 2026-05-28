@@ -16,18 +16,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# ========== MediaMTX ==========
-RUN ARCH=$(uname -m) && \
-    case "$ARCH" in \
-        x86_64)  MTX_ARCH="linux_amd64" ;; \
-        aarch64) MTX_ARCH="linux_arm64" ;; \
-        *) echo "Unsupported arch: $ARCH"; exit 1 ;; \
-    esac && \
-    MTX_VERSION="1.12.0" && \
-    curl -fsSL "https://github.com/bluenviron/mediamtx/releases/download/v${MTX_VERSION}/mediamtx_v${MTX_VERSION}_${MTX_ARCH}.tar.gz" \
-    -o /tmp/mediamtx.tar.gz && \
-    tar -xzf /tmp/mediamtx.tar.gz -C /usr/local/bin/ && \
-    rm /tmp/mediamtx.tar.gz
+# ========== MediaMTX (从本地文件) ==========
+COPY mediamtx_linux.tar.gz /tmp/mediamtx.tar.gz
+RUN tar -xzf /tmp/mediamtx.tar.gz -C /usr/local/bin/ && rm /tmp/mediamtx.tar.gz
 
 # ========== Python 依赖 ==========
 RUN python3 -m pip install --break-system-packages --no-cache-dir \
