@@ -1,20 +1,17 @@
-version: '3.8'
-
 services:
   yolov26:
     build: .
-    container_name: yolov26-detection
+    container_name: yunding360_yolortsp
     ports:
       - "8080:8080"
     environment:
       - PORT=8080
       - TZ=Asia/Shanghai
     volumes:
-      # 挂载视频文件（不放镜像里）
       - ./video.mp4:/app/video.mp4:ro
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          cpus: '4'
-          memory: 4G
+          cpus: '2'
+          memory: 3G
