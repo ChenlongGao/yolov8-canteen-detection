@@ -9,7 +9,6 @@ RUN apt update && apt install -y --no-install-recommends \
     python3 python3-pip python3-venv \
     curl wget ca-certificates git \
     ffmpeg \
-    supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 # ========== Node.js 20.x ==========
@@ -44,7 +43,6 @@ WORKDIR /app
 COPY . /app/
 
 # 配置文件
-COPY docker/supervisord.conf /etc/supervisor/conf.d/app.conf
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
